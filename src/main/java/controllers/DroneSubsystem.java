@@ -14,15 +14,15 @@ public class DroneSubsystem implements Runnable {
         try {
             while (true) {
                 FireEvent task = scheduler.getDroneTask();
-                System.out.println("[controllers.DroneSubsystem] Received task: " + task);
+                System.out.println("[DroneSubsystem] Received task: " + task);
 
                 Thread.sleep(2000);
 
-                System.out.println("[controllers.DroneSubsystem] Completed task: " + task);
+                System.out.println("[DroneSubsystem] Completed task: " + task);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.err.println("[controllers.DroneSubsystem] Interrupted!");
+            System.err.println("[DroneSubsystem] Interrupted!");
         }
     }
 }
