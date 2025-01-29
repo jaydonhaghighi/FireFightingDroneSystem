@@ -1,43 +1,117 @@
 package controllers;
-import java.util.LinkedList;
-import java.util.Queue;
-import models.*;
+
+import models.FireEvent;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Scheduler implements Runnable {
-    private Queue<FireEvent> events;
+    private final BlockingQueue<FireEvent> fireIncidentQueue;
+    private final BlockingQueue<FireEvent> droneTaskQueue;
+    private final BlockingQueue<FireEvent> droneResponseQueue;
+    private final BlockingQueue<FireEvent> fireIncidentResponseQueue;
 
     public Scheduler() {
-        events = new LinkedList<FireEvent>();
+        this.fireIncidentQueue = new LinkedBlockingQueue<>();
+        this.droneTaskQueue = new LinkedBlockingQueue<>();
+        this.droneResponseQueue = new LinkedBlockingQueue<>();
+        this.fireIncidentResponseQueue = new LinkedBlockingQueue<>();
     }
 
-    public synchronized void receiveFireEvent(FireEvent event) {
-        events.add(event);
-        System.out.println("[Scheduler] Event recieved: " + event);
-        notifyAll();
+    // FireIncidentSubsystem -> Scheduler
+    public void receiveFireEvent(FireEvent event) {
+        try {
+            synchronized (System.out) {
+                System.out.println("[Scheduler] Received fire event: " + event);
+            }
+            fireIncidentQueue.put(event);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("[Scheduler] Interrupted while receiving fire event.");
+        }
     }
 
-    public FireEvent getResponseForFireIncidentSubsystem() {
-        FireEvent event = events.peek();
-        return event;
+    // Scheduler -> DroneSubsystem
+    private void processFireEvents() {
+        try {
+            while (true) {
+                FireEvent event = fireIncidentQueue.take(); // wait for a fire event
+
+                synchronized (System.out) {
+                    System.out.println("[Scheduler] Dispatching task to DroneSubsystem: " + event);
+                }
+                droneTaskQueue.put(event);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("[Scheduler] Interrupted while processing fire events.");
+        }
     }
 
+    // DroneSubsystem -> Scheduler
+    public void receiveDroneResponse(FireEvent response) {
+        try {
+            droneResponseQueue.put(response);
+            synchronized (System.out) {
+                System.out.println("[Scheduler] Received response from DroneSubsystem: " + response);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("[Scheduler] Interrupted while receiving drone response.");
+        }
+    }
+
+    // Scheduler -> FireIncidentSubsystem
+    private void processDroneResponses() {
+        try {
+            while (true) {
+                FireEvent response = droneResponseQueue.take(); // wait for a response
+
+                synchronized (System.out) {
+                    System.out.println("[Scheduler] Sending response to FireIncidentSubsystem: " + response);
+                }
+                fireIncidentResponseQueue.put(response);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("[Scheduler] Interrupted while processing drone responses.");
+        }
+    }
+
+    // drone fetches task from scheduler
     public FireEvent getDroneTask() {
-        if (!events.isEmpty()) {
-            FireEvent event = events.poll();
-            return event;
-        } else {
+        try {
+            return droneTaskQueue.take(); // block until a task is available
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("[Scheduler] Interrupted while getting drone task.");
             return null;
         }
     }
 
-    public void run() {
+    // fireIncidentSubsystem fetches response from scheduler
+    public FireEvent getResponseForFireIncidentSubsystem() {
         try {
-            while (events.size() < 0) {
-                wait();
-            }
+            return fireIncidentResponseQueue.take(); // block until a response is available
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.out.println("[Scheduler] Thread interrupted");
+            System.err.println("[Scheduler] Interrupted while getting response for FireIncidentSubsystem.");
+            return null;
+        }
+    }
+
+    @Override
+    public void run() {
+        Thread fireEventProcessor = new Thread(this::processFireEvents);
+        Thread droneResponseProcessor = new Thread(this::processDroneResponses);
+        fireEventProcessor.start();
+        droneResponseProcessor.start();
+
+        try {
+            fireEventProcessor.join();
+            droneResponseProcessor.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("[Scheduler] Interrupted while running.");
         }
     }
 }
