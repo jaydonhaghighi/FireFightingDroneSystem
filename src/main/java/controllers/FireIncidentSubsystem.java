@@ -1,7 +1,6 @@
 package controllers;
 
 import models.FireEvent;
-
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -31,15 +30,23 @@ public class FireIncidentSubsystem implements Runnable {
                 String severity = parts[3];
 
                 FireEvent event = new FireEvent(time, zoneID, eventType, severity);
-                scheduler.receiveFireEvent(event);
-                System.out.println("[FireIncidentSubsystem] Sent event: " + event);
 
-                FireEvent response = scheduler.getResponseForFireIncidentSubsystem();
-                System.out.println("[FireIncidentSubsystem] Received response: " + response);
+                synchronized (System.out) {
+                    System.out.println("[FireIncidentSubsystem] Sent event: " + event);
+                }
 
-                Thread.sleep(1000);
+                scheduler.receiveFireEvent(event); // send to scheduler
             }
-        } catch (IOException | InterruptedException e) {
+
+            while (true) { // wait for responses
+                FireEvent response = scheduler.getResponseForFireIncidentSubsystem();
+                if (response != null) {
+                    synchronized (System.out) {
+                        System.out.println("[FireIncidentSubsystem] Received response: " + response);
+                    }
+                }
+            }
+        } catch (IOException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
         }
     }
