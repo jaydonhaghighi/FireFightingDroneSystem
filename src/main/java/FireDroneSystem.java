@@ -12,7 +12,7 @@ public class FireDroneSystem {
         Thread schedulerThread = new Thread(scheduler);
         Thread fireIncidentThread = new Thread(new FireIncidentSubsystem(scheduler, inputFile));
 
-        int numDrones = 3;
+        int numDrones = 1;
         ExecutorService dronePool = Executors.newFixedThreadPool(numDrones);
 
         schedulerThread.start();
