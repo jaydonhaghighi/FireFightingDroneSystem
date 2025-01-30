@@ -1,4 +1,5 @@
 package controllers;
+
 import models.FireEvent;
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -15,42 +16,38 @@ public class FireIncidentSubsystem implements Runnable {
 
     @Override
     public void run() {
+        // reads file (fire_events.txt)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
-            br.readLine(); // skipping the first line since it's just the header
 
+            // read line by line
             while ((line = br.readLine()) != null) {
-                // splitting the csv line based on commas
-                String[] parts = line.split(",");
-                if (parts.length < 4) continue; // ignoring invalid lines
+                // split line by space
+                String[] parts = line.split(" ");
+                String time = parts[0];
+                int zoneID = Integer.parseInt(parts[1]);
+                String eventType = parts[2];
+                String severity = parts[3];
 
-                String time = parts[0].trim(); // extracting the time when the event happened
-                int zoneID = Integer.parseInt(parts[1].trim()); // getting the zone where the event occurred
-                String eventType = parts[2].trim(); // checking if it's a fire detected or a drone request
-                String severity = parts[3].trim(); // getting the severity level
-
-                // creating a new fire event object with extracted data
                 FireEvent event = new FireEvent(time, zoneID, eventType, severity);
 
                 synchronized (System.out) {
-                    System.out.println("[FireIncidentSubsystem] sending event: " + event);
+                    System.out.println("[FireIncidentSubsystem] Sent event: " + event);
                 }
 
-                // passing the fire event to the scheduler
-                scheduler.receiveFireEvent(event);
+                scheduler.receiveFireEvent(event); // send to scheduler
+            }
 
-                // waiting for the scheduler to send a response before sending another event
-                FireEvent response;
-                while ((response = scheduler.getResponseForFireIncidentSubsystem()) == null) {
-                    Thread.sleep(500); // waiting in small intervals to avoid overloading the system
-                }
-
-                synchronized (System.out) {
-                    System.out.println("[FireIncidentSubsystem] received response: " + response);
+            while (true) { // wait for responses
+                FireEvent response = scheduler.getResponseForFireIncidentSubsystem();
+                if (response != null) {
+                    synchronized (System.out) {
+                        System.out.println("[FireIncidentSubsystem] Received response: " + response);
+                    }
                 }
             }
-        } catch (IOException | InterruptedException e) {
-            System.err.println("[FireIncidentSubsystem] error: " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
         }
     }
 }
