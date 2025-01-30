@@ -9,16 +9,6 @@
 
 ---
 
-## Diagrams
-
-### Class Diagram
-![Class Diagram](./diagrams/classDiagram_iteration#1.png)
-
-### Sequence Diagram
-![Sequence Diagram](./diagrams/sequence_diagram.png)
-
-```
-
 ## Class Descriptions
 
 ### FireEvent
