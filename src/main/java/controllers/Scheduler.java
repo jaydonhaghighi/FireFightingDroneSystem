@@ -32,19 +32,20 @@ public class Scheduler implements Runnable {
 
     // Scheduler -> DroneSubsystem
     private void processFireEvents() {
-        try {
-            while (true) {
+        while(!Thread.currentThread().isInterrupted()) {
+            try {
                 FireEvent event = fireIncidentQueue.take(); // wait for a fire event
-
                 synchronized (System.out) {
                     System.out.println("[Scheduler] Dispatching task to DroneSubsystem: " + event);
                 }
                 droneTaskQueue.put(event);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;//exit loop
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while processing fire events.");
         }
+        System.err.println("[Scheduler] Interrupted while processing fire events.");
     }
 
     // DroneSubsystem -> Scheduler
@@ -62,19 +63,19 @@ public class Scheduler implements Runnable {
 
     // Scheduler -> FireIncidentSubsystem
     private void processDroneResponses() {
-        try {
-            while (true) {
+        while(!Thread.currentThread().isInterrupted()) {
+            try {
                 FireEvent response = droneResponseQueue.take(); // wait for a response
-
                 synchronized (System.out) {
                     System.out.println("[Scheduler] Sending response to FireIncidentSubsystem: " + response);
                 }
                 fireIncidentResponseQueue.put(response);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while processing drone responses.");
         }
+        System.err.println("[Scheduler] Interrupted while processing drone responses.");
     }
 
     // drone fetches task from scheduler
@@ -114,4 +115,31 @@ public class Scheduler implements Runnable {
             System.err.println("[Scheduler] Interrupted while running.");
         }
     }
+
+    //Some helper methods used for the SchedulerTest
+
+    public int getFireIncidentQueueSize() {
+        return fireIncidentQueue.size();
+    }
+
+    public int getDroneTaskQueueSize() {
+        return droneTaskQueue.size();
+    }
+
+    public int getDroneResponseQueueSize() {
+        return droneResponseQueue.size();
+    }
+
+    public int getFireIncidentResponseQueueSize() {
+        return fireIncidentResponseQueue.size();
+    }
+
+    public void clearQueues() {
+        fireIncidentQueue.clear();
+        droneTaskQueue.clear();
+        droneResponseQueue.clear();
+        fireIncidentResponseQueue.clear();
+    }
+
+
 }
