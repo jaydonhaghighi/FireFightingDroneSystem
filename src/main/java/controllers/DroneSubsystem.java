@@ -5,6 +5,8 @@ import models.FireEvent;
 public class DroneSubsystem implements Runnable {
     private final Scheduler scheduler;
 
+    private FireEvent lastTask;
+
     public DroneSubsystem(Scheduler scheduler) {
         this.scheduler = scheduler;
     }
@@ -16,6 +18,11 @@ public class DroneSubsystem implements Runnable {
                 FireEvent task = scheduler.getDroneTask();
                 if (task == null) {
                     continue;
+                }
+
+                //just for testing purposes
+                synchronized (this) {
+                    lastTask = task;
                 }
 
                 synchronized (System.out) {
@@ -34,5 +41,10 @@ public class DroneSubsystem implements Runnable {
             Thread.currentThread().interrupt();
             System.err.println("[DroneSubsystem] Interrupted!");
         }
+    }
+
+    //for testing, get the task that was recieved by the drone
+    public synchronized FireEvent getLastTask(){
+        return lastTask;
     }
 }
