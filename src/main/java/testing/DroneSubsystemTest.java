@@ -42,6 +42,9 @@ class DroneSubsystemTest extends junit.framework.TestCase{
 
         Thread.sleep(100);
 
+        //check if task is not null
+        assertNotNull(droneSubsystem.getLastTask());
+
         //check if created FireEvent is the task that drone recieved
         assertEquals(fireEvent, droneSubsystem.getLastTask());
 
@@ -50,7 +53,6 @@ class DroneSubsystemTest extends junit.framework.TestCase{
 
         //check if drone task is not equal to the event that was not sent
         assertFalse(f1.toString().contentEquals(droneSubsystem.getLastTask().toString()));
-
 
     }
 
