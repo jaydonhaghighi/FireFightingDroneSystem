@@ -4,15 +4,28 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 
+/**
+ * The FireIncidentSubsystem reads fire event data from a file and sends it to the Scheduler.
+ * It also listens for responses from the Scheduler regarding dispatched fire events.
+ */
 public class FireIncidentSubsystem implements Runnable {
     private final Scheduler scheduler;
     private final String inputFile;
 
+    /**
+     * Constructs a FireIncidentSubsystem with a reference to the Scheduler and an input file path
+     * @param scheduler The scheduler that processes fire incidents.
+     * @param inputFile The file containing fire event data.
+     */
     public FireIncidentSubsystem(Scheduler scheduler, String inputFile) {
         this.scheduler = scheduler;
         this.inputFile = inputFile;
     }
 
+    /**
+     * Reads fire events from the input file and sends them to the Scheduler for processing.
+     * It continuously waits for and handles responses from the Scheduler.
+     */
     @Override
     public void run() {
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
