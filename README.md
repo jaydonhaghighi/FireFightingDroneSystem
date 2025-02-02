@@ -11,7 +11,7 @@
 
 ## Team Contributions
 - `Brendan`: Scheduler
-- `Abolarinwa`:
+- `Abolarinwa`: Tests for Scheduler, Documentation
 - `Zeena`: Tests for FireIncidentSubsystem, Sequence Diagrams
 - `Jaydon`:
 - `Raiqah`: Tests for FireEvent and DroneSubsystem 
