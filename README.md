@@ -9,6 +9,16 @@
 
 ---
 
+## Team Contributions
+- `Brendan`: Scheduler
+- `Abolarinwa`: Tests for Scheduler, Documentation
+- `Zeena`: Tests for FireIncidentSubsystem, Sequence Diagrams
+- `Jaydon`: Drone Subsystem, Fire Event
+- `Raiqah`: Tests for FireEvent and DroneSubsystem 
+- `Leen`: Fire Incident Subsystem
+
+---
+
 ## Class Descriptions
 
 ### FireEvent
@@ -125,4 +135,6 @@ Each line represents:
 [Scheduler] Received response from DroneSubsystem: Time: 14:10:00, Zone: 7, Event: DRONE_REQUEST, Severity: Moderate
 [Scheduler] Sending response to FireIncidentSubsystem: Time: 14:10:00, Zone: 7, Event: DRONE_REQUEST, Severity: Moderate
 [FireIncidentSubsystem] Received response: Time: 14:10:00, Zone: 7, Event: DRONE_REQUEST, Severity: Moderate  
+
 ```
+
