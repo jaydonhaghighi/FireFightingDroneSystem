@@ -9,6 +9,16 @@
 
 ---
 
+## Team Contributions
+- `Brendan`: Scheduler
+- `Abolarinwa`:
+- `Zeena`:
+- `Jaydon`:
+- `Raiqah`: 
+- `Leen`:
+
+---
+
 ## Class Descriptions
 
 ### FireEvent
