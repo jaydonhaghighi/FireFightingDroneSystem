@@ -13,7 +13,7 @@
 - `Brendan`: Scheduler
 - `Abolarinwa`: Tests for Scheduler, Documentation
 - `Zeena`: Tests for FireIncidentSubsystem, Sequence Diagrams
-- `Jaydon`:
+- `Jaydon`: Drone Subsystem, Fire Event
 - `Raiqah`: Tests for FireEvent and DroneSubsystem 
 - `Leen`: Fire Incident Subsystem
 
