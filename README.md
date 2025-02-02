@@ -14,7 +14,7 @@
 - `Abolarinwa`:
 - `Zeena`:
 - `Jaydon`:
-- `Raiqah`: 
+- `Raiqah`: Tests for FireEvent and DroneSubsystem 
 - `Leen`: Fire Incident Subsystem
 
 ---
