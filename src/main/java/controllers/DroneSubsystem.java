@@ -8,6 +8,7 @@ import models.FireEvent;
  */
 public class DroneSubsystem implements Runnable {
     private final Scheduler scheduler;
+    private FireEvent lastTask;
 
     /**
      * Constructs a DroneSubsystem with a reference to the Scheduler.
@@ -15,6 +16,7 @@ public class DroneSubsystem implements Runnable {
      */
     public DroneSubsystem(Scheduler scheduler) {
         this.scheduler = scheduler;
+        this.lastTask = null; // Initialize as null
     }
 
     /**
@@ -24,11 +26,13 @@ public class DroneSubsystem implements Runnable {
     @Override
     public void run() {
         try {
-            while (true) {
+            while (!Thread.currentThread().isInterrupted()) {
                 FireEvent task = scheduler.getDroneTask();
                 if (task == null) {
                     continue;
                 }
+
+                lastTask = task; // Store the last task received
 
                 synchronized (System.out) {
                     System.out.println("[DroneSubsystem] Received task: " + task);
@@ -46,5 +50,9 @@ public class DroneSubsystem implements Runnable {
             Thread.currentThread().interrupt();
             System.err.println("[DroneSubsystem] Interrupted!");
         }
+    }
+
+    public FireEvent getLastTask() {
+        return lastTask;
     }
 }
