@@ -3,6 +3,7 @@ package controllers;
 
 import models.FireEvent;
 
+
 /**
  * Interface for different states of the
  * drone
@@ -31,12 +32,21 @@ interface DroneState {
      *
      * */
     void returningBack(DroneStateMachines context);
+
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+    void droneFaulted(DroneStateMachines context);
+
     /**
      * Drone task completion state
      *
      * @param context DroneSateMachines setting drone state
      *
      * */
+
     void taskCompleted(DroneStateMachines context);
 
     /**
@@ -86,6 +96,17 @@ class Idle implements DroneState {
     public void returningBack(DroneStateMachines context) {
         System.out.println("drone is idle and stationed at base.");
     }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+
+    @Override
+    public void droneFaulted(DroneStateMachines context) {
+        System.out.println("drone has not faulted");
+    }
+
     /**
      * Drone task completion status
      *
@@ -154,6 +175,15 @@ class EnRoute implements DroneState {
         System.out.println("drone is en route, has not returned yet");
     }
     /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+    @Override
+    public void droneFaulted(DroneStateMachines context) {
+        System.out.println("drone has not faulted");
+    }
+    /**
      * Drone task completion status
      *
      * @param context DroneSateMachines setting drone state
@@ -164,6 +194,7 @@ class EnRoute implements DroneState {
     public void taskCompleted(DroneStateMachines context) {
         System.out.println("drone is en route, no tasks have been completed yet");
     }
+
 
     /**
      * Current state of drone
@@ -214,6 +245,16 @@ class droppingAgent implements DroneState {
     public void returningBack(DroneStateMachines context) {
         System.out.println("drone is dropping an agent and has not yet returned to its base");
         context.setState(new ArrivedToBase());
+    }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+
+    @Override
+    public void droneFaulted(DroneStateMachines context) {
+        System.out.println("drone has not faulted");
     }
     /**
      * Drone task completion status
@@ -276,7 +317,16 @@ class ArrivedToBase implements DroneState {
     @Override
     public void returningBack(DroneStateMachines context) {
         System.out.println("drone has already arrived to base");
-        context.setState(new Idle());
+    }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+    @Override
+    public void droneFaulted(DroneStateMachines context) {
+        System.out.println("drone has arrived to base and not yet faulted");
+        context.setState(new Fault());
     }
     /**
      * Drone status completing task
@@ -288,8 +338,8 @@ class ArrivedToBase implements DroneState {
     @Override
     public void taskCompleted(DroneStateMachines context) {
         System.out.println("drone has arrived to base and completed its task");
-        context.setState(new Idle());
     }
+
 
     /**
      * Current status of drone
@@ -298,6 +348,82 @@ class ArrivedToBase implements DroneState {
     @Override
     public void displayState() {
         System.out.println("ARRIVED TO BASE");
+    }
+}
+/**
+ * This class is the fault state for Drone
+ * */
+class Fault implements DroneState{
+
+    /**
+     * Drone status handling fire
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     *
+     * */
+    @Override
+    public void handleFireEvent(DroneStateMachines context, FireEvent event) {
+        System.out.println("drone has faulted and cannot handle event");
+    }
+    /**
+     * Drone status dropping agent
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+
+    @Override
+    public void dropAgent(DroneStateMachines context) {
+        System.out.println("drone nozzle/foam cannot open");
+
+    }
+    /**
+     * Drone arrival status
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+
+    @Override
+    public void returningBack(DroneStateMachines context) {
+        System.out.println("drone has faulted and did not move");
+
+    }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+    @Override
+    public void droneFaulted(DroneStateMachines context) {
+        System.out.println("drone has faulted");
+    }
+    /**
+     * Drone task completion status
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+
+
+    @Override
+    public void taskCompleted(DroneStateMachines context) {
+        System.out.println("drone has faulted and completed its task");
+        context.setState(new Idle());
+    }
+
+    /**
+     * Current state of drone
+     * **/
+
+    @Override
+    public void displayState() {
+        System.out.println("FAULTED");
+
     }
 }
 
@@ -353,6 +479,17 @@ class DroneStateMachines {
     }
 
     /**
+     * Drone having a fault
+     * **/
+    public void droneFaulted(){
+        System.out.println("\nState before: ");
+        currentState.displayState();
+        currentState.droneFaulted(this);
+        System.out.println("State after: ");
+        currentState.displayState();
+    }
+
+    /**
      * Drone completing task
      * */
     public void taskCompleted() {
@@ -362,6 +499,8 @@ class DroneStateMachines {
         System.out.println("State after: ");
         currentState.displayState();
     }
+
+
 
 
     /**
@@ -383,13 +522,14 @@ class DroneStateMachines {
         DroneStateMachines drones1 = new DroneStateMachines();
         FireEvent ven = new FireEvent("12:30", 5, "Wildfire", "High");
 
-
         //change states
         drones1.handleFireEvent(ven);
 
         drones1.dropAgent();
 
         drones1.returningBack();
+
+        drones1.droneFaulted();
 
         drones1.taskCompleted();
 
