@@ -3,6 +3,9 @@ package controllers;
 
 import models.FireEvent;
 
+import java.util.LinkedList;
+import java.util.Queue;
+
 
 /**
  * Interface for different states of the
@@ -338,6 +341,7 @@ class ArrivedToBase implements DroneState {
     @Override
     public void taskCompleted(DroneStateMachines context) {
         System.out.println("drone has arrived to base and completed its task");
+        context.setState(new Idle());
     }
 
 
@@ -412,8 +416,8 @@ class Fault implements DroneState{
 
     @Override
     public void taskCompleted(DroneStateMachines context) {
-        System.out.println("drone has faulted and completed its task");
-        context.setState(new Idle());
+        System.out.println("Drone has faulted and returned to base. Now setting to idle.");
+        context.setState(new Idle());  // Once at base, transition to idle
     }
 
     /**
@@ -434,6 +438,7 @@ class Fault implements DroneState{
 class DroneStateMachines {
     //current state of drone
     private DroneState currentState;
+    private Queue<FireEvent> fireEventQueue; // Queue for fire events
 
     /**
      * Constructor
@@ -441,6 +446,7 @@ class DroneStateMachines {
     public DroneStateMachines() {
         //set the inital state of drone
         currentState = new Idle();
+        this.fireEventQueue = new LinkedList<>();
 
     }
 
@@ -498,6 +504,13 @@ class DroneStateMachines {
         currentState.taskCompleted(this);
         System.out.println("State after: ");
         currentState.displayState();
+
+        if(!fireEventQueue.isEmpty()){
+            System.out.println("\nProcessing next fire event in queue ");
+            FireEvent fireEvent = fireEventQueue.poll();
+            scheduleFireEvent(fireEvent);
+        }
+
     }
 
 
@@ -510,28 +523,56 @@ class DroneStateMachines {
      * */
 
     public void setState(DroneState state) {
-        this.currentState = state;
+        if (this.currentState instanceof Fault && !(state instanceof Idle)) {
+            System.out.println("Drone faulted. Returning to base before going idle.");
+            this.currentState = new ArrivedToBase(); // Transition to ArrivedToBase first
+        } else {
+            this.currentState = state;
+        }
+
     }
+
+    public void scheduleFireEvent(FireEvent event){
+        if (currentState instanceof Idle){
+            System.out.println("Drone is idle and ready for new fire event");
+            handleFireEvent(event);
+        } else{
+            System.out.println("Drone is not idle and cannot handle a new fire event" + event);
+            fireEventQueue.add(event);
+        }
+
+    }
+
 
     /**
      * Main program for droneStateMachones
      * */
     public static void main(String[] args) {
 
-        //initialize new drone and fire event
-        DroneStateMachines drones1 = new DroneStateMachines();
-        FireEvent ven = new FireEvent("12:30", 5, "Wildfire", "High");
+        DroneStateMachines drone = new DroneStateMachines();
+        FireEvent event1 = new FireEvent("12:30", 5, "Wildfire", "High");
+        FireEvent event2 = new FireEvent("14:30", 4, "Wildfire", "High");
+        FireEvent event3 = new FireEvent("16:30", 2, "Wildfire", "Medium");
+        drone.scheduleFireEvent(event1);
+        drone.dropAgent();
+        drone.returningBack();
+        drone.droneFaulted();
+        drone.taskCompleted();
 
-        //change states
-        drones1.handleFireEvent(ven);
+        drone.scheduleFireEvent(event2); //event 2 and event 3 arrive in the queue
+        drone.scheduleFireEvent(event3); // Added to queue while event2 is ongoing, should wait for event 2 to finish and state IDLE
 
-        drones1.dropAgent();
+        //this is for event 2
+        drone.dropAgent();
+        drone.returningBack();
+        drone.taskCompleted(); //drone state is now IDLE event 3 can run now
 
-        drones1.returningBack();
+        //this is for event 3
+        drone.dropAgent();
+        drone.returningBack();
+        drone.taskCompleted();
 
-        drones1.droneFaulted();
-
-        drones1.taskCompleted();
 
     }
+
 }
