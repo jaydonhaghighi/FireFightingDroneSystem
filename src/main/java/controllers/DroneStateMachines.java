@@ -3,6 +3,9 @@ package controllers;
 
 import models.FireEvent;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Queue;
 
@@ -525,7 +528,7 @@ public class DroneStateMachines {
 
     /**
      * Get the name of the current drone state
-     * */
+     */
     public String getCurrentStateName() {
         return currentState.getClass().getSimpleName();
     }
@@ -557,36 +560,51 @@ public class DroneStateMachines {
 
     }
 
-
     /**
      * Main program for droneStateMachines
      * */
     public static void main(String[] args) {
-
         DroneStateMachines drone = new DroneStateMachines();
-        FireEvent event1 = new FireEvent("12:30", 5, "Wildfire", "High");
-        FireEvent event2 = new FireEvent("14:30", 4, "Wildfire", "High");
-        FireEvent event3 = new FireEvent("16:30", 2, "Wildfire", "Medium");
-        drone.scheduleFireEvent(event1);
-        drone.dropAgent();
-        drone.returningBack();
-        drone.droneFaulted();
-        drone.taskCompleted();
 
-        drone.scheduleFireEvent(event2); //event 2 and event 3 arrive in the queue
-        drone.scheduleFireEvent(event3); // Added to queue while event2 is ongoing, should wait for event 2 to finish and state IDLE
+        try (BufferedReader br = new BufferedReader(new FileReader("src/main/resources/fire_events.txt"))) {
+            String line;
 
-        //this is for event 2
-        drone.dropAgent();
-        drone.returningBack();
-        drone.taskCompleted(); //drone state is now IDLE event 3 can run now
+            // Formatting
+            while ((line = br.readLine()) != null) {
+                String[] tokens = line.split("\\s+");
+                if (tokens.length < 4) {
+                    System.out.println("Invalid event line: " + line);
+                    continue;
+                }
 
-        //this is for event 3
-        drone.dropAgent();
-        drone.returningBack();
-        drone.taskCompleted();
+                // Parse the event details
+                String time = tokens[0];
+                int id = Integer.parseInt(tokens[1]);
+                String eventType = tokens[2];
+                String severity = tokens[3];
 
+                // Create a new FireEvent
+                FireEvent event = new FireEvent(time, id, eventType, severity);
 
+                processEvent(drone, event);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
+    /**
+     * Processes an event by scheduling it and executing the standard sequence of drone actions.
+     */
+    private static void processEvent(DroneStateMachines drone, FireEvent event) {
+        drone.scheduleFireEvent(event);
+        drone.dropAgent();
+        drone.returningBack();
+
+        if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
+            drone.droneFaulted();
+        }
+
+        drone.taskCompleted();
+    }
 }
