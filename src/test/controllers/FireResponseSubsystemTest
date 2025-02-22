@@ -1,0 +1,59 @@
+package controllers;
+
+import controllers.DroneStateMachines;
+import models.FireEvent;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class FireResponseSubsystemTest {
+    private DroneStateMachines droneStateMachines;
+
+    @BeforeEach
+    void setUp() {
+        droneStateMachines = new DroneStateMachines();
+    }
+
+    @Test
+    void testFireIncidentHandling() {
+        // test that the drone properly handles a fire incident
+        FireEvent fireEvent = new FireEvent("14:30", 4, "Forest Fire", "High");
+
+        droneStateMachines.handleFireEvent(fireEvent);
+        assertNotNull(droneStateMachines);
+        assertEquals("EnRoute", getCurrentState(droneStateMachines));
+
+        droneStateMachines.dropAgent();
+        assertEquals("droppingAgent", getCurrentState(droneStateMachines));
+
+        droneStateMachines.returningBack();
+        assertEquals("ArrivedToBase", getCurrentState(droneStateMachines));
+
+        droneStateMachines.taskCompleted();
+        assertEquals("Idle", getCurrentState(droneStateMachines));
+    }
+
+    @Test
+    void testRapidFireEventHandling() {
+        // test multiple fire events scheduling and queue processing
+        FireEvent fire1 = new FireEvent("14:30", 4, "Forest Fire", "High");
+        FireEvent fire2 = new FireEvent("14:31", 2, "Wildfire", "High");
+        FireEvent fire3 = new FireEvent("14:32", 5, "Building Fire", "Medium");
+
+        droneStateMachines.scheduleFireEvent(fire1);
+        droneStateMachines.scheduleFireEvent(fire2);
+        droneStateMachines.scheduleFireEvent(fire3);
+
+        assertEquals(2, droneStateMachines.getQueueSize());
+
+        droneStateMachines.dropAgent();
+        droneStateMachines.returningBack();
+        droneStateMachines.taskCompleted();
+
+        assertEquals("EnRoute", droneStateMachines.getCurrentStateName());
+    }
+
+    private String getCurrentState(DroneStateMachines drone) {
+        return drone.getCurrentStateName();
+    }
+}
