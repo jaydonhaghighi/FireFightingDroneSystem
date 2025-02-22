@@ -175,8 +175,10 @@ class EnRoute implements DroneState {
 
     @Override
     public void returningBack(DroneStateMachines context) {
-        System.out.println("drone is en route, has not returned yet");
+        System.out.println("drone is en route, has not returned yet"); //
     }
+
+
     /**
      * Drone fault status
      *
@@ -435,7 +437,7 @@ class Fault implements DroneState{
  * DroneStateMachines class
  * for switching drone states
  * */
-class DroneStateMachines {
+public class DroneStateMachines {
     //current state of drone
     private DroneState currentState;
     private Queue<FireEvent> fireEventQueue; // Queue for fire events
@@ -444,10 +446,18 @@ class DroneStateMachines {
      * Constructor
      * */
     public DroneStateMachines() {
-        //set the inital state of drone
+        //set the initial state of drone
         currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
 
+    }
+
+    /**
+     * Returns the number of fire events currently queued
+     * @return int the size of the queue
+     */
+    public int getQueueSize() {
+        return fireEventQueue.size();
     }
 
     /**
@@ -513,8 +523,12 @@ class DroneStateMachines {
 
     }
 
-
-
+    /**
+     * Get the name of the current drone state
+     * */
+    public String getCurrentStateName() {
+        return currentState.getClass().getSimpleName();
+    }
 
     /**
      * Set the state of the drone
@@ -545,7 +559,7 @@ class DroneStateMachines {
 
 
     /**
-     * Main program for droneStateMachones
+     * Main program for droneStateMachines
      * */
     public static void main(String[] args) {
 
