@@ -1,0 +1,38 @@
+package controllers;
+
+import controllers.DroneStateMachines;
+import models.FireEvent;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class DroneFireControlTest {
+    private DroneStateMachines droneStateMachines;
+
+    @BeforeEach
+    void setUp() {
+        droneStateMachines = new DroneStateMachines();
+    }
+
+    @Test
+    void testDroneOperationCycle() {
+        // test the complete drone operation cycle from scheduling a fire to task completion
+        FireEvent event1 = new FireEvent("08:00", 5, "Wildfire", "High");
+
+        droneStateMachines.scheduleFireEvent(event1);
+        assertEquals("EnRoute", getCurrentState(droneStateMachines));
+
+        droneStateMachines.dropAgent();
+        assertEquals("droppingAgent", getCurrentState(droneStateMachines));
+
+        droneStateMachines.returningBack();
+        assertEquals("ArrivedToBase", getCurrentState(droneStateMachines));
+
+        droneStateMachines.taskCompleted();
+        assertEquals("Idle", getCurrentState(droneStateMachines));
+    }
+
+    private String getCurrentState(DroneStateMachines drone) {
+        return drone.getCurrentStateName();
+    }
+}
