@@ -3,7 +3,7 @@
 ## Overview
 
 The Fire Drone System simulates an integrated approach to detecting 
-and handling fire incidents using unmanned drones. The system is designed 
+and handling fire incidents using drones. The system is designed 
 with a modular architecture where different subsystems interact via a 
 central Scheduler. Fire events are read from a text file and processed 
 through a state machine that manages the drone’s behavior. The system 
