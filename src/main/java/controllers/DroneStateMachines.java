@@ -8,7 +8,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.io.*;
+import java.net.*;
+import java.util.*;
 
+import static models.FireEvent.createFireEventFromString;
 
 /**
  * Interface for different states of the
@@ -445,14 +449,59 @@ public class DroneStateMachines {
     private DroneState currentState;
     private Queue<FireEvent> fireEventQueue; // Queue for fire events
 
+    private final InetAddress serverIP;
+
+    DatagramPacket sendPacket, receivePacket;
+    DatagramSocket sendSocket, receieveSocket;
+
+    private final int sendPort = 7000;
+    private final int receivePort = 7001;
     /**
      * Constructor
      * */
-    public DroneStateMachines() {
+    public DroneStateMachines(InetAddress serverIP) {
         //set the initial state of drone
         currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
+        this.serverIP = serverIP;
+        try {
+            sendSocket = new DatagramSocket(sendPort);
+            receieveSocket = new DatagramSocket(receivePort);
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
+    }
 
+    public FireEvent receive() {
+        byte[] data = new byte[100];
+        receivePacket = new DatagramPacket(data, data.length);
+        try {
+            receieveSocket.receive(receivePacket);
+        } catch (IOException e) {
+            System.out.println("receieve error: " + e);
+        }
+
+        System.out.print("Received packet: ");
+        int len = receivePacket.getLength();
+        String r = new String(data, 0, len);
+        System.out.print(r);
+        return createFireEventFromString(r);
+    }
+
+    public void send(String message, int port) {
+        //String message = fire.toString();
+        byte[] msg = message.getBytes();
+        try {
+            sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
+        } catch (UnknownHostException e) {
+            System.out.println("Error: cannot find host: " + e);
+        }
+        System.out.println("Sending: " + message);
+        try {
+            sendSocket.send(sendPacket);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -564,33 +613,16 @@ public class DroneStateMachines {
      * Main program for droneStateMachines
      * */
     public static void main(String[] args) {
-        DroneStateMachines drone = new DroneStateMachines();
-
-        try (BufferedReader br = new BufferedReader(new FileReader("src/main/resources/fire_events.txt"))) {
-            String line;
-
-            // Formatting
-            while ((line = br.readLine()) != null) {
-                String[] tokens = line.split("\\s+");
-                if (tokens.length < 4) {
-                    System.out.println("Invalid event line: " + line);
-                    continue;
-                }
-
-                // Parse the event details
-                String time = tokens[0];
-                int id = Integer.parseInt(tokens[1]);
-                String eventType = tokens[2];
-                String severity = tokens[3];
-
-                // Create a new FireEvent
-                FireEvent event = new FireEvent(time, id, eventType, severity);
-
-                processEvent(drone, event);
-            }
-        } catch (IOException e) {
+        try {
+            DroneStateMachines drone = new DroneStateMachines(InetAddress.getLocalHost());
+            processEvent(drone, drone.receive());
+            drone.send("Received fire event from scheduler", 6001);
+        } catch (UnknownHostException e) {
             e.printStackTrace();
         }
+
+
+
     }
 
     /**
