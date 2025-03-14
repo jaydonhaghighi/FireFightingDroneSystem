@@ -56,12 +56,24 @@ public class FireEvent {
         this.severity = severity;
     }
 
+    public static FireEvent createFireEventFromString(String input) {
+        // Split the string into its components based on whitespace
+        String[] parts = input.split(" ");
+        String time = parts[0];
+        int zoneID = Integer.parseInt(parts[1]);
+        String eventType = parts[2];
+        String severity = parts[3];
+
+        // Create and return the new FireEvent object
+        return new FireEvent(time, zoneID, eventType, severity);
+    }
+
     /**
      * Returns a string representation of the fire event
      * @return A formatted string containing the event details.
      */
     @Override
     public String toString() {
-        return "Time: " + time + ", Zone: " + zoneID + ", Event: " + eventType + ", Severity: " + severity;
+        return time + " " + zoneID + " " + eventType + " " + severity;
     }
 }
