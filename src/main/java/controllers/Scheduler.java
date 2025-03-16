@@ -165,6 +165,8 @@ public class Scheduler {
             Scheduler scheduler = new Scheduler(ip);
             scheduler.receiveFireEvent();
             scheduler.getDroneTask();
+            scheduler.receiveFireEvent();
+            scheduler.getDroneTask();
         } catch (UnknownHostException e) {}
     }
 }
