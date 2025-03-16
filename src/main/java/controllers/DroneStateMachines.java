@@ -616,7 +616,7 @@ public class DroneStateMachines {
         try {
             DroneStateMachines drone = new DroneStateMachines(InetAddress.getLocalHost());
             processEvent(drone, drone.receive());
-            drone.send("Received fire event from scheduler", 6001);
+//            drone.send("Received fire event from scheduler", 6001);
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
