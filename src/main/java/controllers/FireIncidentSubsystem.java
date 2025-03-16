@@ -92,7 +92,8 @@ public class FireIncidentSubsystem {
 
                 FireEvent event = new FireEvent(time, zoneID, eventType, severity);
 
-                return event;
+                send(event);
+                receive();
             }
         } catch (IOException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
@@ -105,8 +106,6 @@ public class FireIncidentSubsystem {
             InetAddress ip = InetAddress.getLocalHost();
             FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("C:\\Users\\brabo\\Desktop\\FireFightingDroneSystem-main\\src\\main\\resources\\fire_events.txt", ip);
             FireEvent fire = fireSystem.readFile();
-            fireSystem.send(fire);
-            fireSystem.receive();
         } catch (UnknownHostException e) {}
 
     }
