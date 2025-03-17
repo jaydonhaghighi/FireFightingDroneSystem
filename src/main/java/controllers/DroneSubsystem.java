@@ -1,441 +1,575 @@
 package controllers;
 
-import models.FireEvent;
 
-import java.io.*;
+import models.FireEvent;
+import models.Location;
+
+import java.io.IOException;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.net.*;
-import java.util.*;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 import static models.FireEvent.createFireEventFromString;
 
 /**
- * Interface for different states of the drone
+ * ANSI colors for console output
  */
-interface DroneState {
-    void handleFireEvent(DroneSubsystem context, FireEvent event);
-    void dropAgent(DroneSubsystem context);
-    void returningBack(DroneSubsystem context);
-    void droneFaulted(DroneSubsystem context);
-    void taskCompleted(DroneSubsystem context);
-    void displayState();
-    String getName();
+class ConsoleColors {
+    // Colors
+    static final String RESET = "\u001B[0m";
+    static final String RED = "\u001B[31m";
+    static final String GREEN = "\u001B[32m";
+    static final String YELLOW = "\u001B[33m";
+    static final String BLUE = "\u001B[34m";
+    static final String CYAN = "\u001B[36m";
 }
 
 /**
- * Base class for all drone states
+ * Interface for different states of the
+ * drone
  */
-abstract class BaseState implements DroneState {
-    @Override
-    public String getName() {
-        return this.getClass().getSimpleName().toUpperCase();
-    }
+
+interface DroneState {
+
+    /**
+     * Drone handling fire status
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     * */
+    void handleFireEvent(DroneSubsystem context, FireEvent event);
+    /**
+     * Drone dropping agent status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+    void dropAgent(DroneSubsystem context);
+    /**
+     * Drone return state
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+    void returningBack(DroneSubsystem context);
+
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+    void droneFaulted(DroneSubsystem context);
+
+    /**
+     * Drone task completion state
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+
+    void taskCompleted(DroneSubsystem context);
+
+    /**
+     * Displaying drone's state
+     * */
+    void displayState();
 }
 
 /**
  * This class is the idle state for Drone
- */
-class Idle extends BaseState {
+ * */
+
+class Idle implements DroneState {
+
+    /**
+     * Drone handling fire status
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     * */
+
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        context.logInfo("Preparing to handle new fire event: " + event);
-        context.setCurrentZone(0); // Start from base
-        context.setTargetZone(event.getZoneID());
+        System.out.println("preparing to handle new fire event: " + event);
         context.setState(new EnRoute());
     }
+    /**
+     * Drone dropping agent status
+     *
+     * @param context DroneSateMachines setting drone state
+     * */
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        context.logInfo("Drone is idle, nothing to drop");
+        System.out.println("drone is idle, nothing to drop");
+
     }
 
+
+    /**
+     * Drone return status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
     @Override
     public void returningBack(DroneSubsystem context) {
-        context.logInfo("Drone is idle and stationed at base");
+        System.out.println("drone is idle and stationed at base.");
     }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
 
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        context.logInfo("Drone has not faulted");
+        System.out.println("drone has not faulted");
     }
+
+    /**
+     * Drone task completion status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        context.logInfo("Drone is idle, no tasks have been completed");
+        System.out.println("drone is idle, no tasks have been completed");
     }
+
+    /**
+     * Display the state of drone
+     *
+     * */
 
     @Override
     public void displayState() {
-        System.out.println("IDLE");
+        System.out.println(ConsoleColors.CYAN + "IDLE" + ConsoleColors.RESET);
     }
 }
 
 /**
  * Class for enroute state of drone
- */
-class EnRoute extends BaseState {
+ * */
+
+class EnRoute implements DroneState {
+
+    /**
+     * Drone handling fire status
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     *
+     * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        context.logInfo("Drone is en route, already handling an event");
+        System.out.println("Drone is en route, already in motion of handling an event");
+
     }
+
+    /**
+     * Drone dropping agent status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        context.logInfo("Drone is en route, now preparing to drop agent");
-        // Update current zone to the target zone once we arrive
-        context.setCurrentZone(context.getTargetZone());
+        System.out.println("drone is en route, cannot drop agent yet");
         context.setState(new droppingAgent());
     }
 
-    @Override
-    public void returningBack(DroneSubsystem context) {
-        context.logInfo("Drone is en route, has not returned yet");
-    }
+    /**
+     * Drone return status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+
 
     @Override
-    public void droneFaulted(DroneSubsystem context) {
-        context.logInfo("Drone has not faulted");
+    public void returningBack(DroneSubsystem context) {
+        System.out.println("drone is en route, has not returned yet"); //
     }
+
+
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
+    @Override
+    public void droneFaulted(DroneSubsystem context) {
+        System.out.println("drone has not faulted");
+    }
+    /**
+     * Drone task completion status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        context.logInfo("Drone is en route, no tasks have been completed yet");
+        System.out.println("drone is en route, no tasks have been completed yet");
     }
+
+
+    /**
+     * Current state of drone
+     *
+     * */
 
     @Override
     public void displayState() {
-        System.out.println("EN ROUTE");
+        System.out.println(ConsoleColors.YELLOW + "EN ROUTE" + ConsoleColors.RESET);
     }
 }
-
 /**
  * Class for dropping agent state
- */
-class droppingAgent extends BaseState {
+ * */
+class droppingAgent implements DroneState {
+
+    /**
+     * Drone handling fire status
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     *
+     * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        context.logInfo("Drone is dropping an agent and already handling task");
+        System.out.println("drone is dropping an agent and already handling task");
     }
+
+    /**
+     * Drone dropping agent status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        context.logInfo("Drone is currently dropping an agent");
+        System.out.println("drone is currently dropping an agent");
     }
 
+    /**
+     * Drone return status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
     @Override
     public void returningBack(DroneSubsystem context) {
-        context.logInfo("Drone has dropped agent, now returning to base");
+        System.out.println("drone is dropping an agent and has not yet returned to its base");
         context.setState(new ArrivedToBase());
     }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
 
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        context.logInfo("Drone has not faulted");
+        System.out.println("drone has not faulted");
     }
+    /**
+     * Drone task completion status
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        context.logInfo("Drone is dropping an agent and has not yet completed its task");
+        System.out.println("drone is dropping an agent and has not yet completed its task");
+
     }
+
+    /**
+     * Current drone state
+     *
+     * */
 
     @Override
     public void displayState() {
-        System.out.println("DROPPING AGENT");
+        System.out.println(ConsoleColors.YELLOW + "DROPPING AGENT" + ConsoleColors.RESET);
     }
 }
-
-/**
+/***
  * Class for drone ArriveToBase state
- */
-class ArrivedToBase extends BaseState {
+ * **/
+
+class ArrivedToBase implements DroneState {
+    /**
+     * Drone status handling fire
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     *
+     * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        context.logInfo("Drone has arrived to base and cannot accept new task");
-    }
+        System.out.println("drone has arrived to base and cannot accept new task");
 
+    }
+    /**
+     * Drone status dropping agent
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
     @Override
     public void dropAgent(DroneSubsystem context) {
-        context.logInfo("Drone has arrived to base and has already dropped agent");
+        System.out.println("drone has arrived to base and has already dropped agent");
     }
 
+    /**
+     * Drone status returning to base
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
     @Override
     public void returningBack(DroneSubsystem context) {
-        context.logInfo("Drone has already arrived to base");
+        System.out.println("drone has already arrived to base");
     }
-
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        context.logInfo("Drone has encountered a fault while at base");
+        System.out.println("drone has arrived to base and not yet faulted");
         context.setState(new Fault());
     }
+    /**
+     * Drone status completing task
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        context.logInfo("Drone has arrived to base and completed its task");
-        context.setCurrentZone(0); // Base is zone 0
-        context.incrementServicesCompleted();
+        System.out.println("drone has arrived to base and completed its task");
         context.setState(new Idle());
     }
 
+
+    /**
+     * Current status of drone
+     *
+     * */
     @Override
     public void displayState() {
-        System.out.println("ARRIVED TO BASE");
+        System.out.println(ConsoleColors.GREEN + "ARRIVED TO BASE" + ConsoleColors.RESET);
     }
 }
-
 /**
  * This class is the fault state for Drone
- */
-class Fault extends BaseState {
+ * */
+class Fault implements DroneState{
+
+    /**
+     * Drone status handling fire
+     *
+     * @param context DroneSateMachines setting drone state
+     *        event FireEvent the fire event to handle
+     *
+     * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        context.logInfo("Drone has faulted and cannot handle event");
+        System.out.println("drone has faulted and cannot handle event");
     }
+    /**
+     * Drone status dropping agent
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        context.logInfo("Drone nozzle/foam cannot open");
+        System.out.println("drone nozzle/foam cannot open");
+
     }
+    /**
+     * Drone arrival status
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
 
     @Override
     public void returningBack(DroneSubsystem context) {
-        context.logInfo("Drone has faulted and did not move");
-    }
+        System.out.println("drone has faulted and did not move");
 
+    }
+    /**
+     * Drone fault status
+     *
+     * @param context DroneSateMachines setting drone state
+     * **/
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        context.logInfo("Drone has already faulted");
+        System.out.println("drone has faulted");
     }
+    /**
+     * Drone task completion status
+     *
+     *
+     * @param context DroneSateMachines setting drone state
+     *
+     * */
+
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        context.logInfo("Drone fault has been resolved, now setting to idle");
-        context.setState(new Idle());
+        System.out.println("Drone has faulted and returned to base. Now setting to idle.");
+        context.setState(new Idle());  // Once at base, transition to idle
     }
+
+    /**
+     * Current state of drone
+     * **/
 
     @Override
     public void displayState() {
-        System.out.println("FAULTED");
+        System.out.println(ConsoleColors.RED + "FAULTED" + ConsoleColors.RESET);
     }
 }
 
 /**
- * DroneStateMachines class for switching drone states
- */
+ * DroneStateMachines class
+ * for switching drone states
+ * */
 public class DroneSubsystem {
-    private final int droneId;
+    //current state of drone
     private DroneState currentState;
-    private Queue<FireEvent> fireEventQueue;
-    private int currentZone = 0; // Start at base
-    private int targetZone = 0;
-    private int servicesCompleted = 0;
+    private Queue<FireEvent> fireEventQueue; // Queue for fire events
+    private String droneId; // Unique identifier for this drone
+    private Location currentLocation; // Current physical location
+    private Location targetLocation; // Target location for movement
+    private Location baseLocation; // Home base location
 
     private final InetAddress serverIP;
 
     DatagramPacket sendPacket, receivePacket;
-    DatagramSocket sendSocket, receiveSocket, statusSocket;
+    DatagramSocket sendSocket, receieveSocket;
 
-    private final int receivePort;
-    private final int sendPort;
-    private final int statusPort = 6002; // Fixed port for drone status updates
-    private boolean running = true;
-    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
+    private final int sendPort = 7000;
+    private final int receivePort = 7001;
+    
     /**
      * Constructor
-     * @param droneId The unique identifier for this drone
      * @param serverIP The IP address of the scheduler server
-     * @param receivePort The port on which this drone receives messages
+     * */
+    public DroneSubsystem(InetAddress serverIP) {
+        this(serverIP, "drone1", new Location(0, 0));
+    }
+    
+    /**
+     * Constructor with drone ID and base location
+     * @param serverIP The IP address of the scheduler server
+     * @param droneId The unique identifier for this drone
+     * @param baseLocation The location of the drone's home base
      */
-    public DroneSubsystem(int droneId, InetAddress serverIP, int receivePort) {
-        this.droneId = droneId;
-        this.currentState = new Idle();
+    public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation) {
+        //set the initial state of drone
+        currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
         this.serverIP = serverIP;
-        this.receivePort = receivePort;
-        this.sendPort = 6001; // Scheduler receive port
-
+        this.droneId = droneId;
+        this.baseLocation = baseLocation;
+        this.currentLocation = baseLocation;
+        this.targetLocation = baseLocation;
+        
         try {
-            // Initialize sockets with proper error handling
-            try {
-                sendSocket = new DatagramSocket();
-                System.out.println("Drone " + droneId + " send socket created on port " + sendSocket.getLocalPort());
-            } catch (SocketException e) {
-                System.err.println("Error creating send socket for Drone " + droneId + ": " + e.getMessage());
-                throw e; // Re-throw to be caught by outer try-catch
+            // Create more predictable unique ports for each drone
+            int droneNumber = 0;
+            if (droneId.length() > 5) {
+                // Extract drone number from the ID (e.g. "drone1" -> 1)
+                droneNumber = Integer.parseInt(droneId.substring(5));
             }
-
-            try {
-                receiveSocket = new DatagramSocket(receivePort);
-                System.out.println("Drone " + droneId + " receive socket created on port " + receivePort);
-            } catch (SocketException e) {
-                System.err.println("Error creating receive socket for Drone " + droneId + " on port " + receivePort);
-                System.err.println("The port " + receivePort + " may already be in use. Try a different port.");
-                throw e; // Re-throw to be caught by outer try-catch
-            }
-
-            try {
-                statusSocket = new DatagramSocket();
-                System.out.println("Drone " + droneId + " status socket created on port " + statusSocket.getLocalPort());
-            } catch (SocketException e) {
-                System.err.println("Error creating status socket for Drone " + droneId + ": " + e.getMessage());
-                throw e; // Re-throw to be caught by outer try-catch
-            }
-
+            
+            // Use offset of 100 * droneNumber to ensure ports don't conflict
+            int uniqueSendPort = sendPort + (droneNumber * 100);
+            int uniqueReceivePort = receivePort + (droneNumber * 100);
+            
+            sendSocket = new DatagramSocket(uniqueSendPort);
+            receieveSocket = new DatagramSocket(uniqueReceivePort);
+            
+            System.out.println(ConsoleColors.CYAN + 
+                "[DRONE " + droneId + "] Initialized at " + baseLocation + 
+                " using ports: send=" + uniqueSendPort + ", receive=" + uniqueReceivePort + 
+                ConsoleColors.RESET);
         } catch (SocketException e) {
-            logError("Socket initialization error", e);
-            System.err.println("Fatal error initializing sockets for Drone " + droneId + ". Exiting.");
-            System.exit(1);
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Socket error: " + e.getMessage() + ConsoleColors.RESET);
+            e.printStackTrace();
         }
     }
 
     /**
-     * Gets the drone's unique ID
-     * @return The drone ID
-     */
-    public int getDroneId() {
-        return droneId;
-    }
-
-    /**
-     * Gets the drone's current zone location
-     * @return The zone ID
-     */
-    public int getCurrentZone() {
-        return currentZone;
-    }
-
-    /**
-     * Sets the drone's current zone location
-     * @param zoneId The zone ID
-     */
-    public void setCurrentZone(int zoneId) {
-        this.currentZone = zoneId;
-        sendStatusUpdate();
-    }
-
-    /**
-     * Gets the drone's target zone
-     * @return The target zone ID
-     */
-    public int getTargetZone() {
-        return targetZone;
-    }
-
-    /**
-     * Sets the drone's target zone
-     * @param zoneId The target zone ID
-     */
-    public void setTargetZone(int zoneId) {
-        this.targetZone = zoneId;
-    }
-
-    /**
-     * Gets the number of fire events this drone has serviced
-     * @return The count of completed services
-     */
-    public int getServicesCompleted() {
-        return servicesCompleted;
-    }
-
-    /**
-     * Increments the count of completed services
-     */
-    public void incrementServicesCompleted() {
-        this.servicesCompleted++;
-        sendStatusUpdate();
-    }
-
-    /**
-     * Logs information messages with timestamp
-     * @param message The message to log
-     */
-    public void logInfo(String message) {
-        String timestamp = LocalDateTime.now().format(timeFormatter);
-        String stateName = currentState.getName();
-        System.out.println("[" + timestamp + "][DRONE " + droneId + "][" + stateName + "] " + message);
-    }
-
-    /**
-     * Logs state transition messages
-     * @param fromState Previous state
-     * @param toState New state
-     */
-    private void logStateTransition(String fromState, String toState) {
-        String timestamp = LocalDateTime.now().format(timeFormatter);
-        System.out.println("[" + timestamp + "][DRONE " + droneId + "][STATE CHANGE] " + fromState + " → " + toState);
-    }
-
-    /**
-     * Logs error messages with timestamp
-     * @param message The error message
-     * @param e The exception that occurred
-     */
-    private void logError(String message, Exception e) {
-        String timestamp = LocalDateTime.now().format(timeFormatter);
-        System.err.println("[" + timestamp + "][DRONE " + droneId + "][ERROR] " + message + ": " + e.getMessage());
-    }
-
-    /**
-     * Receives a packet from the socket and attempts to parse it as a FireEvent
-     * @return FireEvent if successfully parsed, null otherwise
+     * Receives a fire event from the scheduler
+     * 
+     * @return The received fire event
      */
     public FireEvent receive() {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
         try {
-            receiveSocket.receive(receivePacket);
+            receieveSocket.receive(receivePacket);
         } catch (IOException e) {
-            logError("Receive error", e);
-            return null;
+            System.out.println("receieve error: " + e);
         }
 
         int len = receivePacket.getLength();
-        String message = new String(data, 0, len);
-        logInfo("RECEIVED: " + message);
-
-        try {
-            return createFireEventFromString(message);
-        } catch (Exception e) {
-            logError("Error parsing message as FireEvent", e);
-            return null;
-        }
+        String r = new String(data, 0, len);
+        System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Received packet: " + ConsoleColors.YELLOW + r + ConsoleColors.RESET);
+        return createFireEventFromString(r);
     }
 
     /**
-     * Sends a message through the UDP socket
+     * Sends a message to the specified port
+     * 
      * @param message The message to send
      * @param port The port to send to
      */
     public void send(String message, int port) {
+        //String message = fire.toString();
         byte[] msg = message.getBytes();
         try {
-            sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
-            logInfo("SENDING to port " + port + ": " + message);
+            sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
+        } catch (UnknownHostException e) {
+            System.out.println("Error: cannot find host: " + e);
+        }
+        System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Sending: " + ConsoleColors.YELLOW + message + ConsoleColors.RESET);
+        try {
             sendSocket.send(sendPacket);
         } catch (IOException e) {
-            logError("Send error", e);
+            e.printStackTrace();
         }
     }
-
+    
     /**
      * Sends a status update to the scheduler
-     * Format: STATUS droneId currentZone state available
      */
     public void sendStatusUpdate() {
-        boolean available = currentState instanceof Idle;
-        String message = "STATUS " + droneId + " " + currentZone + " " +
-                currentState.getName() + " " + available;
-
-        byte[] msg = message.getBytes();
-        try {
-            sendPacket = new DatagramPacket(msg, msg.length, serverIP, statusPort);
-            logInfo("SENDING STATUS to port " + statusPort + ": " + message);
-            statusSocket.send(sendPacket);
-        } catch (IOException e) {
-            logError("Send error", e);
-        }
+        String status = droneId + " " + 
+                        currentState.getClass().getSimpleName() + " " + 
+                        currentLocation.getX() + " " + 
+                        currentLocation.getY();
+        send(status, 6001); // Send to scheduler
     }
 
     /**
@@ -449,53 +583,64 @@ public class DroneSubsystem {
     /**
      * Handling fire events
      * @param event FireEvent the fire event to handle
-     */
+     * */
     public void handleFireEvent(FireEvent event) {
-        String fromState = currentState.getName();
-        logInfo("Handling fire event: " + event);
-
+        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        currentState.displayState();
         currentState.handleFireEvent(this, event);
-
-        // If the state changed, no need to log it again as setState() handles that
+        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        currentState.displayState();
     }
-
     /**
      * Drone dropping agent
-     */
+     * */
+
     public void dropAgent() {
-        logInfo("Attempting to drop fire suppressant agent");
+        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        currentState.displayState();
         currentState.dropAgent(this);
+        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        currentState.displayState();
     }
 
     /**
      * Drone returning to base
-     */
+     * */
     public void returningBack() {
-        logInfo("Attempting to return to base");
+        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        currentState.displayState();
         currentState.returningBack(this);
+        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        currentState.displayState();
     }
 
     /**
      * Drone having a fault
-     */
-    public void droneFaulted() {
-        logInfo("Checking drone fault status");
+     * **/
+    public void droneFaulted(){
+        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        currentState.displayState();
         currentState.droneFaulted(this);
+        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        currentState.displayState();
     }
 
     /**
      * Drone completing task
-     */
+     * */
     public void taskCompleted() {
-        logInfo("Completing current task");
+        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        currentState.displayState();
         currentState.taskCompleted(this);
+        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        currentState.displayState();
 
-        // Process next event in queue if available
-        if (!fireEventQueue.isEmpty()) {
-            logInfo("Processing next fire event in queue (" + fireEventQueue.size() + " remaining)");
+        if(!fireEventQueue.isEmpty()){
+            System.out.println(ConsoleColors.GREEN + "\n[DRONE] Processing next fire event in queue" + ConsoleColors.RESET);
             FireEvent fireEvent = fireEventQueue.poll();
             scheduleFireEvent(fireEvent);
         }
+
     }
 
     /**
@@ -509,187 +654,307 @@ public class DroneSubsystem {
      * Set the state of the drone
      *
      * @param state DroneState the state of the drone
-     */
-    public void setState(DroneState state) {
-        String fromState = currentState.getName();
-        String toState = state.getName();
+     * */
 
+    public void setState(DroneState state) {
         if (this.currentState instanceof Fault && !(state instanceof Idle)) {
-            logInfo("Drone faulted. Returning to base before going idle");
-            this.currentState = new ArrivedToBase();
-            logStateTransition(fromState, "ARRIVED_TO_BASE");
+            System.out.println("Drone faulted. Returning to base before going idle.");
+            this.currentState = new ArrivedToBase(); // Transition to ArrivedToBase first
         } else {
             this.currentState = state;
-            logStateTransition(fromState, toState);
         }
 
-        // Send a status update whenever state changes
-        sendStatusUpdate();
+    }
+
+    public void scheduleFireEvent(FireEvent event){
+        if (currentState instanceof Idle){
+            System.out.println("Drone is idle and ready for new fire event");
+            handleFireEvent(event);
+        } else{
+            System.out.println("Drone is not idle and cannot handle a new fire event" + event);
+            fireEventQueue.add(event);
+        }
+
     }
 
     /**
-     * Schedule a fire event for processing
-     * @param event The fire event to schedule
+     * Gets the drone's ID
+     * 
+     * @return the drone ID
      */
-    public void scheduleFireEvent(FireEvent event) {
-        if (currentState instanceof Idle) {
-            logInfo("Drone is idle and ready for new fire event");
-            handleFireEvent(event);
-        } else {
-            logInfo("Drone is busy, queuing event for later: " + event);
-            fireEventQueue.add(event);
+    public String getDroneId() {
+        return droneId;
+    }
+    
+    /**
+     * Gets the drone's current location
+     * 
+     * @return the current location
+     */
+    public Location getCurrentLocation() {
+        return currentLocation;
+    }
+    
+    /**
+     * Sets the drone's current location
+     * 
+     * @param location the new location
+     */
+    public void setCurrentLocation(Location location) {
+        this.currentLocation = location;
+    }
+    
+    /**
+     * Gets the drone's target location
+     * 
+     * @return the target location
+     */
+    public Location getTargetLocation() {
+        return targetLocation;
+    }
+    
+    /**
+     * Sets the drone's target location
+     * 
+     * @param location the new target location
+     */
+    public void setTargetLocation(Location location) {
+        this.targetLocation = location;
+    }
+    
+    /**
+     * Gets the drone's base location
+     * 
+     * @return the base location
+     */
+    public Location getBaseLocation() {
+        return baseLocation;
+    }
+    
+    /**
+     * Main program for droneStateMachines
+     * */
+    public static void main(String[] args) {
+        try {
+            // Create multiple drones with different IDs and locations
+            DroneSubsystem drone1 = new DroneSubsystem(InetAddress.getLocalHost(), "drone1", new Location(0, 0));
+            DroneSubsystem drone2 = new DroneSubsystem(InetAddress.getLocalHost(), "drone2", new Location(10, 10));
+            DroneSubsystem drone3 = new DroneSubsystem(InetAddress.getLocalHost(), "drone3", new Location(20, 20));
+            
+            // Start each drone in its own thread
+            Thread thread1 = new Thread(() -> runDrone(drone1));
+            Thread thread2 = new Thread(() -> runDrone(drone2));
+            Thread thread3 = new Thread(() -> runDrone(drone3));
+            
+            thread1.start();
+            thread2.start();
+            thread3.start();
+            
+            // Wait for all threads to complete (they won't normally unless exception occurs)
+            thread1.join();
+            thread2.join();
+            thread3.join();
+            
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Error in DroneSubsystem main: " + e);
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Runs a single drone in a continuous loop
+     * 
+     * @param drone The drone to run
+     */
+    private static void runDrone(DroneSubsystem drone) {
+        try {
+            // Send initial status to scheduler
+            drone.sendStatusUpdate();
+            
+            // Continuously process fire events until interrupted
+            while (true) {
+                FireEvent event = drone.receive();
+                
+                // Only process events assigned to this drone or with no assignment
+                String assignedDroneId = event.getAssignedDroneId();
+                if (assignedDroneId == null || assignedDroneId.equals(drone.getDroneId())) {
+                    processEvent(drone, event);
+                    // Send status update after event is processed
+                    drone.sendStatusUpdate();
+                } else {
+                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + "] Ignoring event assigned to " + assignedDroneId + ConsoleColors.RESET);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error in drone thread for " + drone.getDroneId() + ": " + e);
+            e.printStackTrace();
         }
     }
 
     /**
      * Processes an event by scheduling it and executing the standard sequence of drone actions.
-     * Adds a random delay based on travel time calculation.
      */
-    private void processEvent(FireEvent event) {
-        logInfo("=============================================");
-        logInfo("STARTING EVENT PROCESSING: " + event);
-        logInfo("=============================================");
-
-        // Calculate travel time based on zones
-        int travelTime = Math.abs(event.getZoneID() - currentZone) * 500;  // 500ms per zone
-        logInfo("Calculated travel time: " + travelTime + "ms");
-
-        scheduleFireEvent(event);
-
-        // Simulate travel time
+    private static void processEvent(DroneSubsystem drone, FireEvent event) {
+        // Simulate realistic drone operations with appropriate delays
         try {
-            logInfo("Traveling to zone " + event.getZoneID() + "...");
-            Thread.sleep(travelTime);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logError("Travel interrupted", e);
-        }
-
-        dropAgent();
-
-        // Simulate agent drop time
-        try {
-            logInfo("Dropping fire suppressant agent...");
-            Thread.sleep(1000);  // 1 second to drop agent
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logError("Agent drop interrupted", e);
-        }
-
-        returningBack();
-
-        // Simulate return time
-        try {
-            logInfo("Returning to base...");
-            Thread.sleep(travelTime);  // Same time to return
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logError("Return interrupted", e);
-        }
-
-        if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
-            logInfo("DRONE FAULT detected in event, initiating fault procedure");
-            droneFaulted();
-
-            // Simulate fault resolution time
-            try {
-                logInfo("Resolving drone fault...");
-                Thread.sleep(3000);  // 3 seconds to fix
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logError("Fault resolution interrupted", e);
+            // Get zone location based on event
+            int zoneId = event.getZoneID();
+            Location zoneLocation = getZoneLocation(zoneId);
+            String severity = event.getSeverity();
+            String droneId = drone.getDroneId();
+            
+            // ──────────────── MISSION START ─────────────────
+            System.out.println(ConsoleColors.YELLOW + "\nDRONE " + droneId + ": Mission start to Zone " + zoneId +
+                           " - " + severity + " fire" + ConsoleColors.RESET);
+            
+            // Update drone target location and schedule event
+            drone.setTargetLocation(zoneLocation);
+            drone.scheduleFireEvent(event);
+            Thread.sleep(1000); // Preparation delay
+            
+            // Fly to zone
+            simulateMovement(drone, zoneLocation);
+            
+            // Calculate firefighting duration based on severity
+            int firefightingDuration = calculateFirefightingDuration(severity);
+            
+            // Drop agent at target location
+            drone.setCurrentLocation(zoneLocation);
+            drone.dropAgent();
+            System.out.println(ConsoleColors.RED + " DRONE " + droneId + ": Fighting fire in Zone " + zoneId +
+                           " (" + (firefightingDuration/1000) + "s)" + ConsoleColors.RESET);
+            Thread.sleep(firefightingDuration);
+            
+            // Fire extinguished
+            System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
+                           ConsoleColors.RESET);
+            
+            // Return to base
+            drone.setTargetLocation(drone.getBaseLocation());
+            drone.returningBack();
+            Thread.sleep(500);
+            
+            // Handle faults if needed
+            if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
+                drone.droneFaulted();
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Malfunction detected!" +
+                               ConsoleColors.RESET);
+                Thread.sleep(2000);
             }
+            
+            // Return flight
+            simulateMovement(drone, drone.getBaseLocation());
+            
+            // Complete the task and perform maintenance
+            drone.setCurrentLocation(drone.getBaseLocation());
+            Thread.sleep(1000); // Shorter maintenance time
+            drone.taskCompleted();
+            
+            // ──────────────── MISSION COMPLETE ─────────────────
+            System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Mission complete, ready for next assignment\n" +
+                           ConsoleColors.RESET);
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.out.println(ConsoleColors.RED + "DRONE " + drone.getDroneId() + ": Mission interrupted" +
+                           ConsoleColors.RESET);
         }
-
-        taskCompleted();
-
-        logInfo("=============================================");
-        logInfo("EVENT PROCESSING COMPLETE: " + event);
-        logInfo("=============================================");
-
-        // Acknowledge completion
-        send("Processed fire event: " + event.toString(), sendPort);
     }
-
+    
     /**
-     * Run the drone state machine continuously
+     * Calculate firefighting duration based on fire severity
+     * 
+     * @param severity the fire severity
+     * @return duration in milliseconds
      */
-    public void run() {
-        logInfo("=====================================================================");
-        logInfo("STARTING CONTINUOUS OPERATION - WAITING FOR FIRE EVENTS");
-        logInfo("DRONE ID: " + droneId + " LISTENING ON PORT: " + receivePort);
-        logInfo("=====================================================================");
-
-        // Send initial status update
-        sendStatusUpdate();
-
-        while (running) {
-            try {
-                logInfo("Waiting for incoming fire events...");
-                FireEvent event = receive();
-
-                if (event != null) {
-                    logInfo("Valid fire event received, beginning processing");
-                    processEvent(event);
-
-                    // Send acknowledgment to scheduler
-                    send("Received fire event from scheduler", sendPort);
+    private static int calculateFirefightingDuration(String severity) {
+        switch (severity.toLowerCase()) {
+            case "high":
+                return 8000; // 8 seconds for high severity
+            case "moderate":
+                return 5000; // 5 seconds for moderate severity
+            case "low":
+                return 3000; // 3 seconds for low severity
+            default:
+                return 4000; // Default duration
+        }
+    }
+    
+    /**
+     * Gets a zone location based on zone ID
+     * 
+     * @param zoneId the zone ID
+     * @return the location of the zone
+     */
+    private static Location getZoneLocation(int zoneId) {
+        // Create a simple grid of zones for demonstration
+        int x = ((zoneId-1) % 3) * 10 + 10; // Create a 3x4 grid
+        int y = ((zoneId-1) / 3) * 10 + 10;
+        return new Location(x, y);
+    }
+    
+    /**
+     * Simulates drone movement with simplified output
+     * 
+     * @param drone the drone to move
+     * @param targetLocation the target location
+     */
+    private static void simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
+        Location currentLocation = drone.getCurrentLocation();
+        int distance = currentLocation.distanceTo(targetLocation);
+        boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");
+        String droneId = drone.getDroneId();
+        
+        // If locations are the same, no movement needed
+        if (distance == 0) return;
+        
+        // Calculate travel time based on distance and speed
+        double baseSpeed = isFaulted ? 5.0 : 10.0; // units per second
+        int travelTimeMs = Math.max((int)(distance / baseSpeed * 1000), 1000);
+        
+        // Show flight start status
+        String destinationType = targetLocation.equals(drone.getBaseLocation()) ? "base" : "zone";
+        String speedStatus = isFaulted ? "reduced speed" : "normal speed";
+        
+        System.out.println(ConsoleColors.BLUE + 
+            "✈ DRONE " + droneId + ": Flying to " + destinationType + " (" + 
+            distance + " units, " + String.format("%.1f", travelTimeMs/1000.0) + "s, " + 
+            speedStatus + ")" + ConsoleColors.RESET);
+        
+        // Determine number of updates (fewer updates for cleaner output)
+        int steps = Math.min(3, distance / 10); // max 3 steps for any distance
+        if (steps == 0) steps = 1; // at least 1 step
+        int stepDelayMs = travelTimeMs / steps;
+        
+        // Simulate movement in steps
+        for (int i = 1; i <= steps; i++) {
+            // Calculate intermediate position
+            int x = currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * i / steps;
+            int y = currentLocation.getY() + (targetLocation.getY() - currentLocation.getY()) * i / steps;
+            Location intermediateLocation = new Location(x, y);
+            
+            // Update drone position and send status
+            drone.setCurrentLocation(intermediateLocation);
+            drone.sendStatusUpdate();
+            
+            // Only show progress for longer journeys
+            if (distance > 30 && steps > 1) {
+                int progressPercent = (i * 100) / steps;
+                if (i > 0 && i < steps) { // Don't show for first and last step
+                    System.out.println(ConsoleColors.BLUE + 
+                        "➤ DRONE " + droneId + ": Flight " + progressPercent + "% complete" + 
+                        ConsoleColors.RESET);
                 }
-
-                // Short pause to prevent high CPU usage
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                logError("Interrupted", e);
-                Thread.currentThread().interrupt();
-                break;
-            } catch (Exception e) {
-                logError("Error processing events", e);
-                // Continue running even if there's an error
             }
+            
+            // Delay between movement steps
+            Thread.sleep(stepDelayMs);
         }
-    }
-
-    /**
-     * Stop the continuous operation
-     */
-    public void stop() {
-        running = false;
-        logInfo("Shutdown requested");
-    }
-
-    /**
-     * Main program for droneStateMachines
-     */
-    public static void main(String[] args) {
-        try {
-            // Parse command line arguments for drone ID and port
-            int droneId = 1;  // Default drone ID
-            int receivePort = 7001;  // Default receive port
-
-            if (args.length >= 1) {
-                droneId = Integer.parseInt(args[0]);
-            }
-
-            if (args.length >= 2) {
-                receivePort = Integer.parseInt(args[1]);
-            }
-
-            DroneSubsystem drone = new DroneSubsystem(droneId, InetAddress.getLocalHost(), receivePort);
-
-            // Run continuously
-            drone.run();
-
-            // The following code will only execute if run() method completes or throws an exception
-            drone.logInfo("Shutting down");
-            if (drone.sendSocket != null) drone.sendSocket.close();
-            if (drone.receiveSocket != null) drone.receiveSocket.close();
-            if (drone.statusSocket != null) drone.statusSocket.close();
-
-        } catch (UnknownHostException e) {
-            System.err.println("[DRONE][ERROR] Unknown host error: " + e.getMessage());
-        } catch (NumberFormatException e) {
-            System.err.println("[DRONE][ERROR] Invalid command line arguments: " + e.getMessage());
-            System.err.println("Usage: java DroneStateMachines [droneId] [receivePort]");
-        }
+        
+        // Ensure final position is exactly the target
+        drone.setCurrentLocation(targetLocation);
+        drone.sendStatusUpdate();
     }
 }
