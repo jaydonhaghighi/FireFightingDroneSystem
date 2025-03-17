@@ -548,11 +548,8 @@ public class DroneSubsystem {
     public void send(String message, int port) {
         //String message = fire.toString();
         byte[] msg = message.getBytes();
-        try {
-            sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
-        } catch (UnknownHostException e) {
-            System.out.println("Error: cannot find host: " + e);
-        }
+        // No need for try-catch since serverIP is already validated
+        sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
         System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Sending: " + ConsoleColors.YELLOW + message + ConsoleColors.RESET);
         try {
             sendSocket.send(sendPacket);
@@ -919,7 +916,7 @@ public class DroneSubsystem {
         String speedStatus = isFaulted ? "reduced speed" : "normal speed";
         
         System.out.println(ConsoleColors.BLUE + 
-            "✈ DRONE " + droneId + ": Flying to " + destinationType + " (" + 
+            "DRONE " + droneId + ": Flying to " + destinationType + " (" +
             distance + " units, " + String.format("%.1f", travelTimeMs/1000.0) + "s, " + 
             speedStatus + ")" + ConsoleColors.RESET);
         
@@ -944,7 +941,7 @@ public class DroneSubsystem {
                 int progressPercent = (i * 100) / steps;
                 if (i > 0 && i < steps) { // Don't show for first and last step
                     System.out.println(ConsoleColors.BLUE + 
-                        "➤ DRONE " + droneId + ": Flight " + progressPercent + "% complete" + 
+                        "DRONE " + droneId + ": Flight " + progressPercent + "% complete" +
                         ConsoleColors.RESET);
                 }
             }

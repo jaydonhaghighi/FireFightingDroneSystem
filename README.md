@@ -1,142 +1,164 @@
-# Fire Drone System (Iteration #3)
+# Fire Fighting Drone System (Iteration #3)
 
 ## Overview
 
-The Fire Drone System simulates an integrated approach to detecting 
-and handling fire incidents using drones. The system is designed 
-with a modular architecture where different subsystems interact via a 
-central Scheduler. Fire events are read from a text file and processed 
-through a state machine that manages the drone’s behavior. The system 
-handles various scenarios, including normal fire detection events and drone 
-faults, by transitioning through a series of states (Idle, En Route, Dropping Agent, 
-Arrived To Base, and Fault).
+The Fire Fighting Drone System is a sophisticated simulation of a multi-drone coordination system for detecting and responding to fire incidents across different zones. The system uses a distributed architecture with several subsystems communicating via UDP, where multiple drones can simultaneously respond to fire events based on their availability, location, and workload balance.
+
+Fire events are detected by the FireIncidentSubsystem, coordinated by a central Scheduler, and handled by multiple DroneSubsystem instances. Each drone operates autonomously through a state machine, moving through states like Idle, TakingOff, EnRoute, AtLocation, Extinguishing, ReturningToBase, and ArrivedToBase. The system features spatial awareness with location tracking, zone definitions, and intelligent drone assignment.
 
 ---
 
-## Team Contributions
+## Key Features
 
-- `Brendan:` UDP implementation, ReadMe
-- `Abolarinwa:` Task scheduling
-- `Zeena:` Testing and UML
-- `Jaydon:` Task scheduling
-- `Raiqah:` UML diagrams
-- `Leen:` Testing
+- **Multi-Drone Support**: Manages and coordinates multiple drones simultaneously
+- **Spatial Awareness**: Tracks drone locations and defines geographic zones
+- **Intelligent Drone Assignment**: Selects optimal drone based on proximity, workload, and availability
+- **UDP Communication**: Reliable message passing between subsystems
+- **Zone Configuration**: Reads zone definitions from an external file
+- **Realistic Delays**: Simulates actual drone operation timings
+- **State Machine Logic**: Robust state transitions for each drone
+- **Workload Balancing**: Ensures even distribution of tasks across the drone fleet
+- **Enhanced Console Output**: Clear, color-coded status information with minimal redundancy
 
 ---
 
 ## Class Descriptions
 
-### FireEvent
-A model class representing a fire event. It encapsulates details such as the time of occurrence, zone ID, event type (e.g., FIRE_DETECTED, DRONE_FAULT), and severity level. This class is used by all subsystems to uniformly represent incident data.
+### Models
+- **FireEvent**: Represents a fire incident with time, zone, severity, and assigned drone
+- **Location**: Represents a 2D coordinate with distance calculation and path detection
+- **Zone**: Defines a geographic area with boundaries and fire status tracking
+- **DroneStatus**: Tracks a drone's current state, location, task, and mission history
 
-### FireIncidentSubsystem
-This subsystem is responsible for reading fire event data from an input file (e.g., `fire_events.txt`). It sends each event to the Scheduler for processing and continuously listens for responses, simulating real-time incident handling.
-
-### DroneSubsystem
-The DroneStateMachines this main class demonstrates the state machine logic for the drone. It reads events from the file (located at `src/main/resources/fire_events.txt`), schedules them, and processes them by transitioning through various drone states. The simulation includes a fault condition based on specific event types.
-
-### Scheduler
-The Scheduler acts as the central coordinator. It receives fire events from the FireIncidentSubsystem, dispatches tasks to the DroneSubsystem, and collects drone responses. Using separate queues for incoming fire events, tasks, and responses, it ensures proper flow and timely handling of incidents.
-
-### DroneStateMachines (refactored to DroneSubsystem.java)
+### Controllers
+- **FireIncidentSubsystem**: Reads fire events from input file and sends to Scheduler
+- **Scheduler**: Central coordinator that receives fire events and assigns them to drones
+- **DroneManager**: Manages the drone fleet, zone mapping, and drone selection algorithms
+- **DroneSubsystem**: Handles individual drone behavior including state transitions and movement
 
 ---
 
-## Compiling the Program
+## Compiling and Running the Program
 
-From the project's root directory, run the following command to compile all Java files into the `bin/` directory:
+From the project's root directory:
 
+### Compile:
 ```sh
-javac -d bin -sourcepath src src/controllers/*.java src/models/*.java
+javac -d bin -sourcepath src src/main/java/controllers/*.java src/main/java/models/*.java
 ```
 
----
-
-## Running the Program
-
-After compiling, run the main class (which is within the `controllers` package) using:
+### Run (execute each in a separate terminal):
 
 ```sh
-java -cp bin controllers.DroneStateMachines
+# Start the Scheduler first
 java -cp bin controllers.Scheduler
+
+# Start multiple drone instances
+java -cp bin controllers.DroneSubsystem drone1 0 0
+java -cp bin controllers.DroneSubsystem drone2 10 10
+java -cp bin controllers.DroneSubsystem drone3 20 20
+
+# Start the FireIncidentSubsystem last
 java -cp bin controllers.FireIncidentSubsystem
 ```
 
-This will start the simulation by reading fire events from the file and processing them through the drone state machine.
+---
+
+## Configuration Files
+
+### Fire Events (`fire_events.txt`)
+
+The system reads fire events from `src/main/resources/fire_events.txt` with the format:
+```
+14:03:15 1 FIRE_DETECTED High
+14:12:00 2 FIRE_DETECTED Moderate
+14:15:00 3 FIRE_DETECTED Low
+```
+
+Each line contains:
+- Time (HH:MM:SS)
+- Zone ID
+- Event type
+- Severity (High, Moderate, Low)
+
+### Zones (`zones.txt`)
+
+Zone definitions are read from `src/main/resources/zones.txt` with the format:
+```
+# ZoneID x1 y1 x2 y2
+1 0 0 10 10
+2 10 0 20 10
+3 20 0 30 10
+```
+
+Each line defines a zone with:
+- Zone ID
+- Top-left corner coordinates (x1, y1)
+- Bottom-right corner coordinates (x2, y2)
 
 ---
 
-## Example Fire Events File (`fire_events.txt`)
+## Example Console Output
 
-Below is a sample of what the fire events file might look like. Note that the event types trigger different behaviors in the drone simulation (for example, `DRONE_FAULT` will simulate a fault):
-
+### Scheduler:
 ```
-14:03:15 3 FIRE_DETECTED High
-14:10:00 7 DRONE_FAULT Moderate
+[SCHEDULER] Registered drone drone1 on port 7101
+[SCHEDULER] Registered drone drone2 on port 7201
+[SCHEDULER] Registered drone drone3 on port 7301
+[SCHEDULER] Initialized at (0,0)
+[SCHEDULER] Waiting for drones to register...
+[STANDBY] System monitoring
+[SCHEDULER] Starting to process messages
+[STATUS] No drones registered
+[SYSTEM MAP] (10 zones, 0 drones)
+
+[SCHEDULER] Received packet: drone1 Idle 0 0
+[SCHEDULER] Identified drone status update from: drone1
+[SCHEDULER] Registered new drone: drone1
+[SCHEDULER] Updated drone status: drone1 at (0,0) in state Idle
+
+[ALERT] High fire in Zone 1 at (5,5)
+[ASSIGNED] drone1 to Zone 1 (5 units away, 0 previous missions)
+[SCHEDULER] Sending fire assignment to Drone drone1: 14:03:15 1 FIRE_DETECTED High drone1
 ```
 
-Place this file in the `src/main/resources/` directory (or update the file path in your code accordingly).
-
----
-
-## Expected Console Output (DroneSubsystem)
+### DroneSubsystem:
 ```
-Received packet: 14:03:15 3 FIRE_DETECTED High
-14:03:15 3 FIRE_DETECTED High
-Drone is idle and ready for new fire event
+[DRONE] drone1 initialized at (0,0)
+[DRONE] Registered with scheduler
+[DRONE] Current state: Idle
 
-State before: 
-IDLE
-preparing to handle new fire event: Time: 14:03:15, Zone: 3, Event: FIRE_DETECTED, Severity: High
-State after: 
-EN ROUTE
+[DRONE] Received packet: 14:03:15 1 FIRE_DETECTED High drone1
+[DRONE] Processing fire event: 14:03:15 1 FIRE_DETECTED High
+[DRONE] Transitioning from Idle to TakingOff
+[DRONE] Taking off...
 
-State before: 
-EN ROUTE
-drone is en route, cannot drop agent yet
-State after: 
-DROPPING AGENT
+[DRONE] Transitioning from TakingOff to EnRoute
+[DRONE] En route to fire at zone 1
+[DRONE] Moving to location (5,5)...
+[DRONE] Current position: (3,3)
+[DRONE] Current position: (5,5)
 
-State before: 
-DROPPING AGENT
-drone is dropping an agent and has not yet returned to its base
-State after: 
-ARRIVED TO BASE
+[DRONE] Transitioning from EnRoute to AtLocation
+[DRONE] Arrived at fire location
+[DRONE] Starting fire assessment...
 
-State before: 
-ARRIVED TO BASE
-drone has arrived to base and completed its task
-State after: 
-IDLE
-Drone is idle and ready for new fire event
+[DRONE] Transitioning from AtLocation to Extinguishing
+[DRONE] Extinguishing fire...
+[DRONE] High severity fire - operation will take 8 seconds
 
-State before: 
-IDLE
-preparing to handle new fire event: Time: 14:12:00, Zone: 5, Event: DRONE_FAULT, Severity: Moderate
-State after: 
-EN ROUTE
+[DRONE] Transitioning from Extinguishing to ReturningToBase
+[DRONE] Fire extinguished, returning to base
+[DRONE] Moving to base at (0,0)...
+[DRONE] Current position: (3,3)
+[DRONE] Current position: (0,0)
 
-State before: 
-EN ROUTE
-drone is en route, cannot drop agent yet
-State after: 
-DROPPING AGENT
+[DRONE] Transitioning from ReturningToBase to ArrivedToBase
+[DRONE] Arrived at base
+[DRONE] Preparing for next mission...
 
-State before: 
-DROPPING AGENT
-drone is dropping an agent and has not yet returned to its base
-State after: 
-ARRIVED TO BASE
-
-State before: 
-ARRIVED TO BASE
-drone has arrived to base and not yet faulted
-State after: 
-FAULTED
-
-State before: 
-FAULTED
-Drone has faulted and returned to base. Now setting to idle.
-State after: 
-IDLE
+[DRONE] Transitioning from ArrivedToBase to Idle
+[DRONE] Ready for next mission
 ```
+
+

@@ -54,14 +54,9 @@ public class Location {
      * @return true if this location is on the path, false otherwise
      */
     public boolean isOnPath(Location start, Location end) {
-        // For simplicity, we'll use manhattan distance and check if this point lies on a direct path
-        // A more sophisticated approach would consider actual routes
         int distanceStartToThis = start.distanceTo(this);
         int distanceThisToEnd = this.distanceTo(end);
         int distanceStartToEnd = start.distanceTo(end);
-        
-        // If this point is on the path, the sum of distances through this point should equal
-        // the direct distance (within some small epsilon for floating point errors)
         return distanceStartToThis + distanceThisToEnd == distanceStartToEnd;
     }
     
