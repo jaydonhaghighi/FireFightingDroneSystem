@@ -127,6 +127,11 @@ public class FireIncidentSubsystem {
             InetAddress ip = InetAddress.getLocalHost();
             FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
             
+            // Add initial delay to allow scheduler and drones to start up
+            System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] Waiting 10 seconds for the Scheduler and Drones to initialize..." + FireSystemColors.RESET);
+            Thread.sleep(10000); // 10 second delay
+            System.out.println(FireSystemColors.GREEN + "[FIRE SYSTEM] Starting to send fire events..." + FireSystemColors.RESET);
+            
             // Read all fire events from the file
             FireEvent fire = fireSystem.readFile();
             
@@ -137,6 +142,9 @@ public class FireIncidentSubsystem {
             }
         } catch (UnknownHostException e) {
             e.printStackTrace();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.out.println("Sleep interrupted: " + e);
         } catch (Exception e) {
             System.out.println("Error in FireIncidentSubsystem main: " + e);
             e.printStackTrace();

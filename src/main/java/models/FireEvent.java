@@ -9,6 +9,8 @@ public class FireEvent {
     String eventType;
     /**The severity level of the fire event(e.g. High, Medium, Low*/
     String severity;
+    /**The ID of the drone assigned to handle this event*/
+    String assignedDroneId;
 
     /**
      * Constructors a FireEvent with the specified parameters below
@@ -22,6 +24,7 @@ public class FireEvent {
         this.zoneID = zoneID;
         this.eventType = eventType;
         this.severity = severity;
+        this.assignedDroneId = null;
     }
 
     public String getTime() {
@@ -55,6 +58,22 @@ public class FireEvent {
     public void setSeverity(String severity) {
         this.severity = severity;
     }
+    
+    /**
+     * Gets the ID of the drone assigned to this event
+     * @return drone ID or null if no drone assigned
+     */
+    public String getAssignedDroneId() {
+        return assignedDroneId;
+    }
+    
+    /**
+     * Assigns a drone to this event
+     * @param droneId the ID of the drone to assign
+     */
+    public void assignDrone(String droneId) {
+        this.assignedDroneId = droneId;
+    }
 
     public static FireEvent createFireEventFromString(String input) {
         // Split the string into its components based on whitespace
@@ -64,8 +83,15 @@ public class FireEvent {
         String eventType = parts[2];
         String severity = parts[3];
 
-        // Create and return the new FireEvent object
-        return new FireEvent(time, zoneID, eventType, severity);
+        // Create the new FireEvent object
+        FireEvent event = new FireEvent(time, zoneID, eventType, severity);
+        
+        // Check if a drone ID is included
+        if (parts.length > 4) {
+            event.assignDrone(parts[4]);
+        }
+        
+        return event;
     }
 
     /**
@@ -74,6 +100,10 @@ public class FireEvent {
      */
     @Override
     public String toString() {
-        return time + " " + zoneID + " " + eventType + " " + severity;
+        if (assignedDroneId != null) {
+            return time + " " + zoneID + " " + eventType + " " + severity + " " + assignedDroneId;
+        } else {
+            return time + " " + zoneID + " " + eventType + " " + severity;
+        }
     }
 }

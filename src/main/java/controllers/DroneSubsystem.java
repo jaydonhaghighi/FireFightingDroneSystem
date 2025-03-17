@@ -2,6 +2,7 @@ package controllers;
 
 
 import models.FireEvent;
+import models.Location;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -456,6 +457,10 @@ public class DroneSubsystem {
     //current state of drone
     private DroneState currentState;
     private Queue<FireEvent> fireEventQueue; // Queue for fire events
+    private String droneId; // Unique identifier for this drone
+    private Location currentLocation; // Current physical location
+    private Location targetLocation; // Target location for movement
+    private Location baseLocation; // Home base location
 
     private final InetAddress serverIP;
 
@@ -464,22 +469,61 @@ public class DroneSubsystem {
 
     private final int sendPort = 7000;
     private final int receivePort = 7001;
+    
     /**
      * Constructor
+     * @param serverIP The IP address of the scheduler server
      * */
     public DroneSubsystem(InetAddress serverIP) {
+        this(serverIP, "drone1", new Location(0, 0));
+    }
+    
+    /**
+     * Constructor with drone ID and base location
+     * @param serverIP The IP address of the scheduler server
+     * @param droneId The unique identifier for this drone
+     * @param baseLocation The location of the drone's home base
+     */
+    public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation) {
         //set the initial state of drone
         currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
         this.serverIP = serverIP;
+        this.droneId = droneId;
+        this.baseLocation = baseLocation;
+        this.currentLocation = baseLocation;
+        this.targetLocation = baseLocation;
+        
         try {
-            sendSocket = new DatagramSocket(sendPort);
-            receieveSocket = new DatagramSocket(receivePort);
+            // Create more predictable unique ports for each drone
+            int droneNumber = 0;
+            if (droneId.length() > 5) {
+                // Extract drone number from the ID (e.g. "drone1" -> 1)
+                droneNumber = Integer.parseInt(droneId.substring(5));
+            }
+            
+            // Use offset of 100 * droneNumber to ensure ports don't conflict
+            int uniqueSendPort = sendPort + (droneNumber * 100);
+            int uniqueReceivePort = receivePort + (droneNumber * 100);
+            
+            sendSocket = new DatagramSocket(uniqueSendPort);
+            receieveSocket = new DatagramSocket(uniqueReceivePort);
+            
+            System.out.println(ConsoleColors.CYAN + 
+                "[DRONE " + droneId + "] Initialized at " + baseLocation + 
+                " using ports: send=" + uniqueSendPort + ", receive=" + uniqueReceivePort + 
+                ConsoleColors.RESET);
         } catch (SocketException e) {
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Socket error: " + e.getMessage() + ConsoleColors.RESET);
             e.printStackTrace();
         }
     }
 
+    /**
+     * Receives a fire event from the scheduler
+     * 
+     * @return The received fire event
+     */
     public FireEvent receive() {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
@@ -491,10 +535,16 @@ public class DroneSubsystem {
 
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-        System.out.println(ConsoleColors.BLUE + "[DRONE] Received packet: " + ConsoleColors.YELLOW + r + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Received packet: " + ConsoleColors.YELLOW + r + ConsoleColors.RESET);
         return createFireEventFromString(r);
     }
 
+    /**
+     * Sends a message to the specified port
+     * 
+     * @param message The message to send
+     * @param port The port to send to
+     */
     public void send(String message, int port) {
         //String message = fire.toString();
         byte[] msg = message.getBytes();
@@ -503,12 +553,23 @@ public class DroneSubsystem {
         } catch (UnknownHostException e) {
             System.out.println("Error: cannot find host: " + e);
         }
-        System.out.println(ConsoleColors.BLUE + "[DRONE] Sending: " + ConsoleColors.YELLOW + message + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Sending: " + ConsoleColors.YELLOW + message + ConsoleColors.RESET);
         try {
             sendSocket.send(sendPacket);
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+    
+    /**
+     * Sends a status update to the scheduler
+     */
+    public void sendStatusUpdate() {
+        String status = droneId + " " + 
+                        currentState.getClass().getSimpleName() + " " + 
+                        currentLocation.getX() + " " + 
+                        currentLocation.getY();
+        send(status, 6001); // Send to scheduler
     }
 
     /**
@@ -617,23 +678,117 @@ public class DroneSubsystem {
     }
 
     /**
+     * Gets the drone's ID
+     * 
+     * @return the drone ID
+     */
+    public String getDroneId() {
+        return droneId;
+    }
+    
+    /**
+     * Gets the drone's current location
+     * 
+     * @return the current location
+     */
+    public Location getCurrentLocation() {
+        return currentLocation;
+    }
+    
+    /**
+     * Sets the drone's current location
+     * 
+     * @param location the new location
+     */
+    public void setCurrentLocation(Location location) {
+        this.currentLocation = location;
+    }
+    
+    /**
+     * Gets the drone's target location
+     * 
+     * @return the target location
+     */
+    public Location getTargetLocation() {
+        return targetLocation;
+    }
+    
+    /**
+     * Sets the drone's target location
+     * 
+     * @param location the new target location
+     */
+    public void setTargetLocation(Location location) {
+        this.targetLocation = location;
+    }
+    
+    /**
+     * Gets the drone's base location
+     * 
+     * @return the base location
+     */
+    public Location getBaseLocation() {
+        return baseLocation;
+    }
+    
+    /**
      * Main program for droneStateMachines
      * */
     public static void main(String[] args) {
         try {
-            DroneSubsystem drone = new DroneSubsystem(InetAddress.getLocalHost());
+            // Create multiple drones with different IDs and locations
+            DroneSubsystem drone1 = new DroneSubsystem(InetAddress.getLocalHost(), "drone1", new Location(0, 0));
+            DroneSubsystem drone2 = new DroneSubsystem(InetAddress.getLocalHost(), "drone2", new Location(10, 10));
+            DroneSubsystem drone3 = new DroneSubsystem(InetAddress.getLocalHost(), "drone3", new Location(20, 20));
             
-            // Continuously process fire events until interrupted
-            while (true) {
-                FireEvent event = drone.receive();
-                processEvent(drone, event);
-                // No need to send a message back to the scheduler after completing an event
-                // The drone will just wait for the next event
-            }
+            // Start each drone in its own thread
+            Thread thread1 = new Thread(() -> runDrone(drone1));
+            Thread thread2 = new Thread(() -> runDrone(drone2));
+            Thread thread3 = new Thread(() -> runDrone(drone3));
+            
+            thread1.start();
+            thread2.start();
+            thread3.start();
+            
+            // Wait for all threads to complete (they won't normally unless exception occurs)
+            thread1.join();
+            thread2.join();
+            thread3.join();
+            
         } catch (UnknownHostException e) {
             e.printStackTrace();
         } catch (Exception e) {
             System.out.println("Error in DroneSubsystem main: " + e);
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Runs a single drone in a continuous loop
+     * 
+     * @param drone The drone to run
+     */
+    private static void runDrone(DroneSubsystem drone) {
+        try {
+            // Send initial status to scheduler
+            drone.sendStatusUpdate();
+            
+            // Continuously process fire events until interrupted
+            while (true) {
+                FireEvent event = drone.receive();
+                
+                // Only process events assigned to this drone or with no assignment
+                String assignedDroneId = event.getAssignedDroneId();
+                if (assignedDroneId == null || assignedDroneId.equals(drone.getDroneId())) {
+                    processEvent(drone, event);
+                    // Send status update after event is processed
+                    drone.sendStatusUpdate();
+                } else {
+                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + "] Ignoring event assigned to " + assignedDroneId + ConsoleColors.RESET);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error in drone thread for " + drone.getDroneId() + ": " + e);
             e.printStackTrace();
         }
     }
@@ -644,24 +799,99 @@ public class DroneSubsystem {
     private static void processEvent(DroneSubsystem drone, FireEvent event) {
         // Add a small processing delay to simulate drone operations
         try {
+            // Get zone location based on event
+            int zoneId = event.getZoneID();
+            Location zoneLocation = getZoneLocation(zoneId);
+            
+            // Update drone target location
+            drone.setTargetLocation(zoneLocation);
+            
+            // Schedule the fire event
             drone.scheduleFireEvent(event);
             Thread.sleep(500); // 0.5 sec delay
             
+            // Simulate movement to the fire zone
+            simulateMovement(drone, zoneLocation);
+            
+            // Drop agent at target location
+            drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
             Thread.sleep(500); // 0.5 sec delay
             
+            // Set target back to base and return
+            drone.setTargetLocation(drone.getBaseLocation());
             drone.returningBack();
             Thread.sleep(500); // 0.5 sec delay
-
+            
+            // Handle faults if needed
             if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
                 drone.droneFaulted();
                 Thread.sleep(500); // 0.5 sec delay
             }
-
+            
+            // Simulate movement back to base
+            simulateMovement(drone, drone.getBaseLocation());
+            
+            // Complete the task
+            drone.setCurrentLocation(drone.getBaseLocation());
             drone.taskCompleted();
+            
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.out.println(ConsoleColors.RED + "[DRONE] Processing interrupted" + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + "] Processing interrupted" + ConsoleColors.RESET);
         }
+    }
+    
+    /**
+     * Gets a zone location based on zone ID
+     * 
+     * @param zoneId the zone ID
+     * @return the location of the zone
+     */
+    private static Location getZoneLocation(int zoneId) {
+        // Create a simple grid of zones for demonstration
+        int x = ((zoneId-1) % 3) * 10 + 10; // Create a 3x4 grid
+        int y = ((zoneId-1) / 3) * 10 + 10;
+        return new Location(x, y);
+    }
+    
+    /**
+     * Simulates drone movement from current location to target location
+     * 
+     * @param drone the drone to move
+     * @param targetLocation the target location
+     */
+    private static void simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
+        Location currentLocation = drone.getCurrentLocation();
+        int distance = currentLocation.distanceTo(targetLocation);
+        
+        System.out.println(ConsoleColors.CYAN + 
+            "[DRONE " + drone.getDroneId() + "] Moving from " + currentLocation + 
+            " to " + targetLocation + " (distance: " + distance + ")" + 
+            ConsoleColors.RESET);
+        
+        // If locations are the same, no movement needed
+        if (distance == 0) return;
+        
+        // Simulate movement in steps
+        int steps = Math.min(distance, 5); // Max 5 steps for visualization
+        for (int i = 1; i <= steps; i++) {
+            // Calculate intermediate position
+            int x = currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * i / steps;
+            int y = currentLocation.getY() + (targetLocation.getY() - currentLocation.getY()) * i / steps;
+            Location intermediateLocation = new Location(x, y);
+            
+            // Update drone position
+            drone.setCurrentLocation(intermediateLocation);
+            
+            // Send status update to scheduler
+            drone.sendStatusUpdate();
+            
+            // Short delay between movement steps
+            Thread.sleep(200);
+        }
+        
+        // Ensure final position is exactly the target
+        drone.setCurrentLocation(targetLocation);
     }
 }
