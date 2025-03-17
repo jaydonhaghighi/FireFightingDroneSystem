@@ -2,10 +2,9 @@ package controllers;
 
 import models.FireEvent;
 
-import java.io.IOException;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.io.*;
 import java.net.*;
+import java.util.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -41,6 +40,8 @@ class Idle extends BaseState {
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
         context.logInfo("Preparing to handle new fire event: " + event);
+        context.setCurrentZone(0); // Start from base
+        context.setTargetZone(event.getZoneID());
         context.setState(new EnRoute());
     }
 
@@ -82,6 +83,8 @@ class EnRoute extends BaseState {
     @Override
     public void dropAgent(DroneSubsystem context) {
         context.logInfo("Drone is en route, now preparing to drop agent");
+        // Update current zone to the target zone once we arrive
+        context.setCurrentZone(context.getTargetZone());
         context.setState(new droppingAgent());
     }
 
@@ -170,6 +173,8 @@ class ArrivedToBase extends BaseState {
     @Override
     public void taskCompleted(DroneSubsystem context) {
         context.logInfo("Drone has arrived to base and completed its task");
+        context.setCurrentZone(0); // Base is zone 0
+        context.incrementServicesCompleted();
         context.setState(new Idle());
     }
 
@@ -219,34 +224,127 @@ class Fault extends BaseState {
  * DroneStateMachines class for switching drone states
  */
 public class DroneSubsystem {
-    // Current state of drone
+    private final int droneId;
     private DroneState currentState;
     private Queue<FireEvent> fireEventQueue;
+    private int currentZone = 0; // Start at base
+    private int targetZone = 0;
+    private int servicesCompleted = 0;
 
     private final InetAddress serverIP;
 
     DatagramPacket sendPacket, receivePacket;
-    DatagramSocket sendSocket, receieveSocket;
+    DatagramSocket sendSocket, receiveSocket, statusSocket;
 
-    private final int sendPort = 7000;
-    private final int receivePort = 7001;
+    private final int receivePort;
+    private final int sendPort;
+    private final int statusPort = 6002; // Fixed port for drone status updates
     private boolean running = true;
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * Constructor
+     * @param droneId The unique identifier for this drone
+     * @param serverIP The IP address of the scheduler server
+     * @param receivePort The port on which this drone receives messages
      */
-    public DroneSubsystem(InetAddress serverIP) {
-        // Set the initial state of drone
-        currentState = new Idle();
+    public DroneSubsystem(int droneId, InetAddress serverIP, int receivePort) {
+        this.droneId = droneId;
+        this.currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
         this.serverIP = serverIP;
+        this.receivePort = receivePort;
+        this.sendPort = 6001; // Scheduler receive port
+
         try {
-            sendSocket = new DatagramSocket(sendPort);
-            receieveSocket = new DatagramSocket(receivePort);
+            // Initialize sockets with proper error handling
+            try {
+                sendSocket = new DatagramSocket();
+                System.out.println("Drone " + droneId + " send socket created on port " + sendSocket.getLocalPort());
+            } catch (SocketException e) {
+                System.err.println("Error creating send socket for Drone " + droneId + ": " + e.getMessage());
+                throw e; // Re-throw to be caught by outer try-catch
+            }
+
+            try {
+                receiveSocket = new DatagramSocket(receivePort);
+                System.out.println("Drone " + droneId + " receive socket created on port " + receivePort);
+            } catch (SocketException e) {
+                System.err.println("Error creating receive socket for Drone " + droneId + " on port " + receivePort);
+                System.err.println("The port " + receivePort + " may already be in use. Try a different port.");
+                throw e; // Re-throw to be caught by outer try-catch
+            }
+
+            try {
+                statusSocket = new DatagramSocket();
+                System.out.println("Drone " + droneId + " status socket created on port " + statusSocket.getLocalPort());
+            } catch (SocketException e) {
+                System.err.println("Error creating status socket for Drone " + droneId + ": " + e.getMessage());
+                throw e; // Re-throw to be caught by outer try-catch
+            }
+
         } catch (SocketException e) {
             logError("Socket initialization error", e);
+            System.err.println("Fatal error initializing sockets for Drone " + droneId + ". Exiting.");
+            System.exit(1);
         }
+    }
+
+    /**
+     * Gets the drone's unique ID
+     * @return The drone ID
+     */
+    public int getDroneId() {
+        return droneId;
+    }
+
+    /**
+     * Gets the drone's current zone location
+     * @return The zone ID
+     */
+    public int getCurrentZone() {
+        return currentZone;
+    }
+
+    /**
+     * Sets the drone's current zone location
+     * @param zoneId The zone ID
+     */
+    public void setCurrentZone(int zoneId) {
+        this.currentZone = zoneId;
+        sendStatusUpdate();
+    }
+
+    /**
+     * Gets the drone's target zone
+     * @return The target zone ID
+     */
+    public int getTargetZone() {
+        return targetZone;
+    }
+
+    /**
+     * Sets the drone's target zone
+     * @param zoneId The target zone ID
+     */
+    public void setTargetZone(int zoneId) {
+        this.targetZone = zoneId;
+    }
+
+    /**
+     * Gets the number of fire events this drone has serviced
+     * @return The count of completed services
+     */
+    public int getServicesCompleted() {
+        return servicesCompleted;
+    }
+
+    /**
+     * Increments the count of completed services
+     */
+    public void incrementServicesCompleted() {
+        this.servicesCompleted++;
+        sendStatusUpdate();
     }
 
     /**
@@ -256,7 +354,7 @@ public class DroneSubsystem {
     public void logInfo(String message) {
         String timestamp = LocalDateTime.now().format(timeFormatter);
         String stateName = currentState.getName();
-        System.out.println("[" + timestamp + "][DRONE][" + stateName + "] " + message);
+        System.out.println("[" + timestamp + "][DRONE " + droneId + "][" + stateName + "] " + message);
     }
 
     /**
@@ -266,7 +364,7 @@ public class DroneSubsystem {
      */
     private void logStateTransition(String fromState, String toState) {
         String timestamp = LocalDateTime.now().format(timeFormatter);
-        System.out.println("[" + timestamp + "][DRONE][STATE CHANGE] " + fromState + " → " + toState);
+        System.out.println("[" + timestamp + "][DRONE " + droneId + "][STATE CHANGE] " + fromState + " → " + toState);
     }
 
     /**
@@ -276,7 +374,7 @@ public class DroneSubsystem {
      */
     private void logError(String message, Exception e) {
         String timestamp = LocalDateTime.now().format(timeFormatter);
-        System.err.println("[" + timestamp + "][DRONE][ERROR] " + message + ": " + e.getMessage());
+        System.err.println("[" + timestamp + "][DRONE " + droneId + "][ERROR] " + message + ": " + e.getMessage());
     }
 
     /**
@@ -287,7 +385,7 @@ public class DroneSubsystem {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
         try {
-            receieveSocket.receive(receivePacket);
+            receiveSocket.receive(receivePacket);
         } catch (IOException e) {
             logError("Receive error", e);
             return null;
@@ -313,11 +411,28 @@ public class DroneSubsystem {
     public void send(String message, int port) {
         byte[] msg = message.getBytes();
         try {
-            sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
-            logInfo("SENDING: " + message);
+            sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
+            logInfo("SENDING to port " + port + ": " + message);
             sendSocket.send(sendPacket);
-        } catch (UnknownHostException e) {
-            logError("Cannot find host", e);
+        } catch (IOException e) {
+            logError("Send error", e);
+        }
+    }
+
+    /**
+     * Sends a status update to the scheduler
+     * Format: STATUS droneId currentZone state available
+     */
+    public void sendStatusUpdate() {
+        boolean available = currentState instanceof Idle;
+        String message = "STATUS " + droneId + " " + currentZone + " " +
+                currentState.getName() + " " + available;
+
+        byte[] msg = message.getBytes();
+        try {
+            sendPacket = new DatagramPacket(msg, msg.length, serverIP, statusPort);
+            logInfo("SENDING STATUS to port " + statusPort + ": " + message);
+            statusSocket.send(sendPacket);
         } catch (IOException e) {
             logError("Send error", e);
         }
@@ -348,45 +463,31 @@ public class DroneSubsystem {
      * Drone dropping agent
      */
     public void dropAgent() {
-        String fromState = currentState.getName();
         logInfo("Attempting to drop fire suppressant agent");
-
         currentState.dropAgent(this);
-
-        // If the state changed, no need to log it again as setState() handles that
     }
 
     /**
      * Drone returning to base
      */
     public void returningBack() {
-        String fromState = currentState.getName();
         logInfo("Attempting to return to base");
-
         currentState.returningBack(this);
-
-        // If the state changed, no need to log it again as setState() handles that
     }
 
     /**
      * Drone having a fault
      */
     public void droneFaulted() {
-        String fromState = currentState.getName();
         logInfo("Checking drone fault status");
-
         currentState.droneFaulted(this);
-
-        // If the state changed, no need to log it again as setState() handles that
     }
 
     /**
      * Drone completing task
      */
     public void taskCompleted() {
-        String fromState = currentState.getName();
         logInfo("Completing current task");
-
         currentState.taskCompleted(this);
 
         // Process next event in queue if available
@@ -421,6 +522,9 @@ public class DroneSubsystem {
             this.currentState = state;
             logStateTransition(fromState, toState);
         }
+
+        // Send a status update whenever state changes
+        sendStatusUpdate();
     }
 
     /**
@@ -439,19 +543,62 @@ public class DroneSubsystem {
 
     /**
      * Processes an event by scheduling it and executing the standard sequence of drone actions.
+     * Adds a random delay based on travel time calculation.
      */
     private void processEvent(FireEvent event) {
         logInfo("=============================================");
         logInfo("STARTING EVENT PROCESSING: " + event);
         logInfo("=============================================");
 
+        // Calculate travel time based on zones
+        int travelTime = Math.abs(event.getZoneID() - currentZone) * 500;  // 500ms per zone
+        logInfo("Calculated travel time: " + travelTime + "ms");
+
         scheduleFireEvent(event);
+
+        // Simulate travel time
+        try {
+            logInfo("Traveling to zone " + event.getZoneID() + "...");
+            Thread.sleep(travelTime);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logError("Travel interrupted", e);
+        }
+
         dropAgent();
+
+        // Simulate agent drop time
+        try {
+            logInfo("Dropping fire suppressant agent...");
+            Thread.sleep(1000);  // 1 second to drop agent
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logError("Agent drop interrupted", e);
+        }
+
         returningBack();
+
+        // Simulate return time
+        try {
+            logInfo("Returning to base...");
+            Thread.sleep(travelTime);  // Same time to return
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logError("Return interrupted", e);
+        }
 
         if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
             logInfo("DRONE FAULT detected in event, initiating fault procedure");
             droneFaulted();
+
+            // Simulate fault resolution time
+            try {
+                logInfo("Resolving drone fault...");
+                Thread.sleep(3000);  // 3 seconds to fix
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logError("Fault resolution interrupted", e);
+            }
         }
 
         taskCompleted();
@@ -461,7 +608,7 @@ public class DroneSubsystem {
         logInfo("=============================================");
 
         // Acknowledge completion
-        send("Processed fire event: " + event.toString(), 6001);
+        send("Processed fire event: " + event.toString(), sendPort);
     }
 
     /**
@@ -470,7 +617,11 @@ public class DroneSubsystem {
     public void run() {
         logInfo("=====================================================================");
         logInfo("STARTING CONTINUOUS OPERATION - WAITING FOR FIRE EVENTS");
+        logInfo("DRONE ID: " + droneId + " LISTENING ON PORT: " + receivePort);
         logInfo("=====================================================================");
+
+        // Send initial status update
+        sendStatusUpdate();
 
         while (running) {
             try {
@@ -482,7 +633,7 @@ public class DroneSubsystem {
                     processEvent(event);
 
                     // Send acknowledgment to scheduler
-                    send("Received fire event from scheduler", 6001);
+                    send("Received fire event from scheduler", sendPort);
                 }
 
                 // Short pause to prevent high CPU usage
@@ -511,7 +662,19 @@ public class DroneSubsystem {
      */
     public static void main(String[] args) {
         try {
-            DroneSubsystem drone = new DroneSubsystem(InetAddress.getLocalHost());
+            // Parse command line arguments for drone ID and port
+            int droneId = 1;  // Default drone ID
+            int receivePort = 7001;  // Default receive port
+
+            if (args.length >= 1) {
+                droneId = Integer.parseInt(args[0]);
+            }
+
+            if (args.length >= 2) {
+                receivePort = Integer.parseInt(args[1]);
+            }
+
+            DroneSubsystem drone = new DroneSubsystem(droneId, InetAddress.getLocalHost(), receivePort);
 
             // Run continuously
             drone.run();
@@ -519,10 +682,14 @@ public class DroneSubsystem {
             // The following code will only execute if run() method completes or throws an exception
             drone.logInfo("Shutting down");
             if (drone.sendSocket != null) drone.sendSocket.close();
-            if (drone.receieveSocket != null) drone.receieveSocket.close();
+            if (drone.receiveSocket != null) drone.receiveSocket.close();
+            if (drone.statusSocket != null) drone.statusSocket.close();
 
         } catch (UnknownHostException e) {
             System.err.println("[DRONE][ERROR] Unknown host error: " + e.getMessage());
+        } catch (NumberFormatException e) {
+            System.err.println("[DRONE][ERROR] Invalid command line arguments: " + e.getMessage());
+            System.err.println("Usage: java DroneStateMachines [droneId] [receivePort]");
         }
     }
 }
