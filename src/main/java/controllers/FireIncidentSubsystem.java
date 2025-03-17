@@ -66,7 +66,7 @@ public class FireIncidentSubsystem {
 
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-        System.out.println(FireSystemColors.GREEN + "[FIRE SYSTEM] Received response: " + FireSystemColors.YELLOW + r + FireSystemColors.RESET);
+        System.out.println(FireSystemColors.GREEN + "✓ CONFIRMED: " + r + FireSystemColors.RESET);
     }
 
     public void send(FireEvent fire) {
@@ -77,7 +77,7 @@ public class FireIncidentSubsystem {
         } catch (UnknownHostException e) {
             System.out.println("Error: cannot find host: " + e);
         }
-        System.out.println(FireSystemColors.GREEN + "[FIRE SYSTEM] Sending fire: " + FireSystemColors.YELLOW + message + FireSystemColors.RESET);
+        System.out.println(FireSystemColors.GREEN + "FIRE ALERT: " + message + FireSystemColors.RESET);
         try {
             sendSocket.send(sendPacket);
         } catch (IOException e) {
@@ -127,18 +127,12 @@ public class FireIncidentSubsystem {
                             delaySeconds = 8; // Default case
                     }
                     
-                    // Display countdown to next fire
-                    System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] Next fire event in " + delaySeconds + 
-                                     " seconds..." + FireSystemColors.RESET);
+                    // Display countdown to next fire - simplified
+                    System.out.println(FireSystemColors.CYAN + "Next fire in " + delaySeconds +
+                                     "s" + FireSystemColors.RESET);
                     
-                    // Sleep with periodic updates
-                    for (int i = delaySeconds; i > 0; i -= 2) {
-                        Thread.sleep(2000); // Sleep 2 seconds at a time
-                        if (i > 2) {
-                            System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] " + (i-2) + 
-                                             " seconds until next fire event..." + FireSystemColors.RESET);
-                        }
-                    }
+                    // Sleep without so many updates
+                    Thread.sleep(delaySeconds * 1000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -154,24 +148,19 @@ public class FireIncidentSubsystem {
             InetAddress ip = InetAddress.getLocalHost();
             FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
             
-            // Add initial delay to allow scheduler and drones to start up
-            System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] Waiting 10 seconds for the Scheduler and Drones to initialize..." + FireSystemColors.RESET);
-            Thread.sleep(10000); // 10 second delay
-            System.out.println(FireSystemColors.GREEN + "[FIRE SYSTEM] Starting to send fire events..." + FireSystemColors.RESET);
+
+            System.out.println(FireSystemColors.GREEN + "● SYSTEM: Ready to send fire alerts" + FireSystemColors.RESET);
             
             // Read all fire events from the file
             FireEvent fire = fireSystem.readFile();
             
             // After sending all events, keep listening for responses
-            System.out.println(FireSystemColors.CYAN + "\n[FIRE SYSTEM] All fire events sent. Waiting for responses..." + FireSystemColors.RESET);
+            System.out.println(FireSystemColors.CYAN + "\n● SYSTEM: All fire events processed. Monitoring..." + FireSystemColors.RESET);
             while (true) {
                 fireSystem.receive();
             }
         } catch (UnknownHostException e) {
             e.printStackTrace();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.out.println("Sleep interrupted: " + e);
         } catch (Exception e) {
             System.out.println("Error in FireIncidentSubsystem main: " + e);
             e.printStackTrace();

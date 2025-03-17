@@ -183,23 +183,13 @@ public class DroneManager {
         Location fireLocation = getLocationForZone(zoneId);
         String severity = event.getSeverity();
         
-        System.out.println("[DRONE MANAGER] Selecting best drone for fire in zone " + zoneId + 
-                         " at " + fireLocation + " with severity " + severity);
-        
         // First, look for an en-route drone that can be reassigned based on path
         DroneStatus enRouteDrone = findEnRouteDroneThatPasses(fireLocation, severity);
         if (enRouteDrone != null) {
-            System.out.println("[DRONE MANAGER] Found en-route drone: " + enRouteDrone.getDroneId());
             return enRouteDrone;
         }
         
         // Otherwise, find available drone with balanced workload and proximity
-        for (DroneStatus drone : drones.values()) {
-            System.out.println("[DRONE MANAGER] Checking drone: " + drone.getDroneId() + 
-                             ", state: '" + drone.getState() + "'" +
-                             ", available: " + drone.isAvailable());
-        }
-        
         List<DroneStatus> availableDrones = drones.values().stream()
             .filter(DroneStatus::isAvailable)
             .sorted(Comparator.comparingInt(DroneStatus::getZonesServiced)
@@ -207,14 +197,9 @@ public class DroneManager {
             .toList();
             
         if (availableDrones.isEmpty()) {
-            System.out.println("[DRONE MANAGER] No available drones found.");
             return null;
         } else {
-            DroneStatus selected = availableDrones.get(0);
-            System.out.println("[DRONE MANAGER] Selected drone: " + selected.getDroneId() + 
-                             " at " + selected.getCurrentLocation() +
-                             ", distance: " + selected.distanceTo(fireLocation));
-            return selected;
+            return availableDrones.get(0);
         }
     }
     
