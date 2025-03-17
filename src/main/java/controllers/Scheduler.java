@@ -108,70 +108,6 @@ public class Scheduler {
         }
     }
 
-    // Scheduler -> DroneSubsystem
-
-    /**
-     * Processes fire events from the fireIncidentQueue and dispatches them to the droneTaskQueue.
-     */
-//    private void processFireEvents() {
-//        while(!Thread.currentThread().isInterrupted()) {
-//            try {
-//                FireEvent event = fireIncidentQueue.take(); // wait for a fire event
-//                synchronized (System.out) {
-//                    System.out.println("[Scheduler] Dispatching task to DroneSubsystem: " + event);
-//                }
-//                droneTaskQueue.put(event);
-//
-//            } catch (InterruptedException e) {
-//                Thread.currentThread().interrupt();
-//                break;//exit loop
-//            }
-//        }
-//        System.err.println("[Scheduler] Interrupted while processing fire events.");
-//    }
-
-    // DroneSubsystem -> Scheduler
-
-    /**
-     * Receives a response from the DroneSubsystem and adds it to the droneResponseQueue.
-     *
-     * @param response The drone response to be added to the queue.
-     */
-//    public void receiveDroneResponse(FireEvent response) {
-//        try {
-//            droneResponseQueue.put(response);
-//            synchronized (System.out) {
-//                System.out.println("[Scheduler] Received response from DroneSubsystem: " + response);
-//            }
-//        } catch (InterruptedException e) {
-//            Thread.currentThread().interrupt();
-//            System.err.println("[Scheduler] Interrupted while receiving drone response.");
-//        }
-//    }
-
-    // Scheduler -> FireIncidentSubsystem
-
-    /**
-     * Processes drone responses from the droneResponseQueue and forwards them to the fireIncidentResponseQueue.
-     */
-//    private void processDroneResponses() {
-//        while(!Thread.currentThread().isInterrupted()) {
-//            try {
-//                FireEvent response = droneResponseQueue.take(); // wait for a response
-//                synchronized (System.out) {
-//                    System.out.println("[Scheduler] Sending response to FireIncidentSubsystem: " + response);
-//                }
-//                fireIncidentResponseQueue.put(response);
-//            } catch (InterruptedException e) {
-//                Thread.currentThread().interrupt();
-//                break;
-//            }
-//        }
-//        System.err.println("[Scheduler] Interrupted while processing drone responses.");
-//    }
-
-    // drone fetches task from scheduler
-
     /**
      * Retrieves a task for the DroneSubsystem from the droneTaskQueue.
      *
@@ -204,8 +140,12 @@ public class Scheduler {
                 // Send to drone for processing
                 scheduler.getDroneTask();
                 
-                // Can add a small delay here if needed
-                // Thread.sleep(100);
+                // Add a small delay to manage processing flow
+                try {
+                    Thread.sleep(500); // 0.5 sec delay between operations
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
         } catch (UnknownHostException e) {
             e.printStackTrace();

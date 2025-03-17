@@ -642,14 +642,26 @@ public class DroneSubsystem {
      * Processes an event by scheduling it and executing the standard sequence of drone actions.
      */
     private static void processEvent(DroneSubsystem drone, FireEvent event) {
-        drone.scheduleFireEvent(event);
-        drone.dropAgent();
-        drone.returningBack();
+        // Add a small processing delay to simulate drone operations
+        try {
+            drone.scheduleFireEvent(event);
+            Thread.sleep(500); // 0.5 sec delay
+            
+            drone.dropAgent();
+            Thread.sleep(500); // 0.5 sec delay
+            
+            drone.returningBack();
+            Thread.sleep(500); // 0.5 sec delay
 
-        if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
-            drone.droneFaulted();
+            if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
+                drone.droneFaulted();
+                Thread.sleep(500); // 0.5 sec delay
+            }
+
+            drone.taskCompleted();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.out.println(ConsoleColors.RED + "[DRONE] Processing interrupted" + ConsoleColors.RESET);
         }
-
-        drone.taskCompleted();
     }
 }

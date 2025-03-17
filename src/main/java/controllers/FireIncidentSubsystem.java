@@ -107,6 +107,14 @@ public class FireIncidentSubsystem {
 
                 send(event);
                 receive();
+                
+                // Add 2-second delay between each fire event
+                try {
+                    System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] Waiting 2 seconds before sending next event..." + FireSystemColors.RESET);
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
         } catch (IOException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
