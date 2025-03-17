@@ -1,189 +1,197 @@
 package controllers;
 
 import models.FireEvent;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+import static models.FireEvent.createFireEventFromString;
 
 /**
  * The Scheduler class manages the flow of fire incident events and drone responses.
  * It processes incoming fire events, assigns them to drones, and forwards drone responses
  * to the FireIncidentSubsystem
  */
-public class Scheduler implements Runnable {
-    private final BlockingQueue<FireEvent> fireIncidentQueue;
-    private final BlockingQueue<FireEvent> droneTaskQueue;
-    private final BlockingQueue<FireEvent> droneResponseQueue;
-    private final BlockingQueue<FireEvent> fireIncidentResponseQueue;
+public class Scheduler {
+    DatagramPacket sendPacket, receivePacket;
+    DatagramSocket sendSocket, receiveSocket;
+
+    Queue<FireEvent> events = new LinkedBlockingQueue<FireEvent>();
+    private final int sendPort = 6000;
+    private final int receivePort = 6001;
+    private final InetAddress fireIncidentIP;
+    private boolean running = true;
+    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
-     *Constructs a new Scheduler with separate queues for fire incidents,
+     * Constructs a new Scheduler with separate queues for fire incidents,
      * drone tasks, drone responses, and fire incident responses.
      */
-    public Scheduler() {
-        this.fireIncidentQueue = new LinkedBlockingQueue<>();
-        this.droneTaskQueue = new LinkedBlockingQueue<>();
-        this.droneResponseQueue = new LinkedBlockingQueue<>();
-        this.fireIncidentResponseQueue = new LinkedBlockingQueue<>();
-    }
-
-    // FireIncidentSubsystem -> Scheduler
-
-    /**
-     * Recieves a fire event from the FireIncidentSubsystem and adds it to the queue.
-     *
-     * @param event The fire event to be added to the fireIncidentQueue.
-     */
-    public void receiveFireEvent(FireEvent event) {
+    public Scheduler(InetAddress ip) {
+        this.fireIncidentIP = ip;
         try {
-            synchronized (System.out) {
-                System.out.println("[Scheduler] Received fire event: " + event);
-            }
-            fireIncidentQueue.put(event);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while receiving fire event.");
+            sendSocket = new DatagramSocket(sendPort);
+            receiveSocket = new DatagramSocket(receivePort);
+        } catch (SocketException e) {
+            logError("Socket initialization error", e);
         }
     }
 
-    // Scheduler -> DroneSubsystem
-
     /**
-     * Processes fire events from the fireIncidentQueue and dispatches them to the droneTaskQueue.
+     * Logs information messages with timestamp
+     * @param message The message to log
      */
-    private void processFireEvents() {
-        while(!Thread.currentThread().isInterrupted()) {
-            try {
-                FireEvent event = fireIncidentQueue.take(); // wait for a fire event
-                synchronized (System.out) {
-                    System.out.println("[Scheduler] Dispatching task to DroneSubsystem: " + event);
-                }
-                droneTaskQueue.put(event);
-
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;//exit loop
-            }
-        }
-        System.err.println("[Scheduler] Interrupted while processing fire events.");
+    private void logInfo(String message) {
+        String timestamp = LocalDateTime.now().format(timeFormatter);
+        System.out.println("[" + timestamp + "][SCHEDULER] " + message);
     }
 
-    // DroneSubsystem -> Scheduler
+    /**
+     * Logs error messages with timestamp
+     * @param message The error message
+     * @param e The exception that occurred
+     */
+    private void logError(String message, Exception e) {
+        String timestamp = LocalDateTime.now().format(timeFormatter);
+        System.err.println("[" + timestamp + "][SCHEDULER][ERROR] " + message + ": " + e.getMessage());
+    }
 
     /**
-     * Receives a response from the DroneSubsystem and adds it to the droneResponseQueue.
-     *
-     * @param response The drone response to be added to the queue.
+     * Receives a packet from the socket and attempts to parse it as a FireEvent
+     * @return FireEvent if successfully parsed, null otherwise
      */
-    public void receiveDroneResponse(FireEvent response) {
+    public FireEvent receive() {
+        byte[] data = new byte[100];
+        receivePacket = new DatagramPacket(data, data.length);
         try {
-            droneResponseQueue.put(response);
-            synchronized (System.out) {
-                System.out.println("[Scheduler] Received response from DroneSubsystem: " + response);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while receiving drone response.");
+            receiveSocket.receive(receivePacket);
+        } catch (IOException e) {
+            logError("Receive error", e);
+            return null;
+        }
+
+        int len = receivePacket.getLength();
+        String message = new String(data, 0, len);
+        logInfo("RECEIVED: " + message);
+
+        // Check if this is an acknowledgment message rather than a fire event
+        if (message.startsWith("Processed") || message.startsWith("Received")) {
+            logInfo("↳ Acknowledgment message - no action needed");
+            return null;
+        }
+
+        try {
+            FireEvent event = createFireEventFromString(message);
+            logInfo("↳ Valid fire event parsed");
+            return event;
+        } catch (Exception e) {
+            logError("Error parsing message as FireEvent", e);
+            return null;
         }
     }
 
-    // Scheduler -> FireIncidentSubsystem
+    /**
+     * Sends a UDP packet to the designated ip and port
+     * @param fire the fire event that is being sent
+     * @param port which port the data should be sent to
+     * @param what a description of what is being sent
+     * @param location where the data is being sent
+     */
+    public void send(FireEvent fire, int port, String what, String location) {
+        String message = fire.toString();
+        byte[] msg = message.getBytes();
+        try {
+            sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
+            logInfo("SENDING to " + location + " (" + what + "): " + message);
+            sendSocket.send(sendPacket);
+        } catch (UnknownHostException e) {
+            logError("Cannot find host", e);
+        } catch (IOException e) {
+            logError("Send error", e);
+        }
+    }
 
     /**
-     * Processes drone responses from the droneResponseQueue and forwards them to the fireIncidentResponseQueue.
+     * Receives a fire event from the FireIncidentSubsystem and adds it to the queue.
      */
-    private void processDroneResponses() {
-        while(!Thread.currentThread().isInterrupted()) {
+    public void receiveFireEvent() {
+        FireEvent fire = receive();
+        if (fire != null) {
+            logInfo("EVENT QUEUED: " + fire.toString());
+            events.add(fire);
+            send(fire, 5001, "response", "Fire Incident System");
+        }
+    }
+
+    /**
+     * Retrieves a task for the DroneSubsystem from the events queue.
+     */
+    public void getDroneTask() {
+        if (!events.isEmpty()) {
+            FireEvent event = events.poll();
+            logInfo("DISPATCHING EVENT TO DRONE: " + event.toString());
+            send(event, 7001, "fire event", "Drone");
+        }
+    }
+
+    /**
+     * Continuously runs the scheduler to process events
+     */
+    public void run() {
+        logInfo("=====================================================================");
+        logInfo("STARTING CONTINUOUS EVENT PROCESSING");
+        logInfo("=====================================================================");
+
+        while (running) {
             try {
-                FireEvent response = droneResponseQueue.take(); // wait for a response
-                synchronized (System.out) {
-                    System.out.println("[Scheduler] Sending response to FireIncidentSubsystem: " + response);
+                logInfo("Waiting for incoming messages...");
+                receiveFireEvent();
+
+                // Process any received events
+                if (!events.isEmpty()) {
+                    logInfo("Events in queue: " + events.size() + " - dispatching to drone");
+                    getDroneTask();
                 }
-                fireIncidentResponseQueue.put(response);
+
+                // Short pause to prevent high CPU usage
+                Thread.sleep(100);
             } catch (InterruptedException e) {
+                logError("Interrupted", e);
                 Thread.currentThread().interrupt();
                 break;
+            } catch (Exception e) {
+                logError("Error processing events", e);
+                // Continue running even if there's an error
             }
         }
-        System.err.println("[Scheduler] Interrupted while processing drone responses.");
-    }
-
-    // drone fetches task from scheduler
-
-    /**
-     * Retrieves a task for the DroneSubsystem from the droneTaskQueue.
-     *
-     * @return The next fire event to be handled by a drone.
-     */
-    public FireEvent getDroneTask() {
-        try {
-            return droneTaskQueue.take(); // block until a task is available
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while getting drone task.");
-            return null;
-        }
-    }
-
-    // fireIncidentSubsystem fetches response from scheduler
-
-    /**
-     * Retrieves a processed response for the FireIncidentSubsystem from the fireIncidentResponseQueue.
-     *
-     * @return The next processed response for the FireIncidentSubsystem.
-     */
-    public FireEvent getResponseForFireIncidentSubsystem() {
-        try {
-            return fireIncidentResponseQueue.take(); // block until a response is available
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while getting response for FireIncidentSubsystem.");
-            return null;
-        }
     }
 
     /**
-     * Runs the Scheduler, starting threads for processing fire events and drone responses.
+     * Stops the scheduler's continuous processing
      */
-    @Override
-    public void run() {
-        Thread fireEventProcessor = new Thread(this::processFireEvents);
-        Thread droneResponseProcessor = new Thread(this::processDroneResponses);
-        fireEventProcessor.start();
-        droneResponseProcessor.start();
+    public void stop() {
+        running = false;
+        logInfo("Shutdown requested");
+    }
 
+    public static void main(String[] args) {
         try {
-            fireEventProcessor.join();
-            droneResponseProcessor.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[Scheduler] Interrupted while running.");
+            InetAddress ip = InetAddress.getLocalHost();
+            Scheduler scheduler = new Scheduler(ip);
+
+            // Run the scheduler continuously
+            scheduler.run();
+
+            // The following code will only execute if run() method completes or throws an exception
+            scheduler.logInfo("Shutting down");
+            if (scheduler.sendSocket != null) scheduler.sendSocket.close();
+            if (scheduler.receiveSocket != null) scheduler.receiveSocket.close();
+
+        } catch (UnknownHostException e) {
+            System.err.println("[SCHEDULER][ERROR] Unknown host error: " + e.getMessage());
         }
     }
-
-    //Some helper methods used for the SchedulerTest
-
-    public int getFireIncidentQueueSize() {
-        return fireIncidentQueue.size();
-    }
-
-    public int getDroneTaskQueueSize() {
-        return droneTaskQueue.size();
-    }
-
-    public int getDroneResponseQueueSize() {
-        return droneResponseQueue.size();
-    }
-
-    public int getFireIncidentResponseQueueSize() {
-        return fireIncidentResponseQueue.size();
-    }
-
-    public void clearQueues() {
-        fireIncidentQueue.clear();
-        droneTaskQueue.clear();
-        droneResponseQueue.clear();
-        fireIncidentResponseQueue.clear();
-    }
-
-
 }
