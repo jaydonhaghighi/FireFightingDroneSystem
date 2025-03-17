@@ -1,4 +1,4 @@
-# Fire Drone System (Iteration #2)
+# Fire Drone System (Iteration #3)
 
 ## Overview
 
@@ -15,11 +15,11 @@ Arrived To Base, and Fault).
 
 ## Team Contributions
 
-- `Brendan:` Sequence Diagram and State Machine Diagram
-- `Abolarinwa:` Implement core scheduling logic to decide which drone handles a new fire
-- `Zeena:`Implementing Drone transitions
-- `Jaydon:` UML Class Diagram, README.md, Documentation and overall code review.
-- `Raiqah:` Implementing Drone transitions
+- `Brendan:` UDP implementation, ReadMe
+- `Abolarinwa:` Task scheduling
+- `Zeena:` Testing and UML
+- `Jaydon:` Task scheduling
+- `Raiqah:` UML diagrams
 - `Leen:` Testing
 
 ---
@@ -33,13 +33,12 @@ A model class representing a fire event. It encapsulates details such as the tim
 This subsystem is responsible for reading fire event data from an input file (e.g., `fire_events.txt`). It sends each event to the Scheduler for processing and continuously listens for responses, simulating real-time incident handling.
 
 ### DroneSubsystem
-The DroneSubsystem continuously retrieves tasks from the Scheduler and simulates the drone’s behavior. It processes events by “dropping agents,” “returning to base,” and even simulates a drone fault when a fire event of type `DRONE_FAULT` is encountered. It logs task reception and completion messages.
+The DroneStateMachines this main class demonstrates the state machine logic for the drone. It reads events from the file (located at `src/main/resources/fire_events.txt`), schedules them, and processes them by transitioning through various drone states. The simulation includes a fault condition based on specific event types.
 
 ### Scheduler
 The Scheduler acts as the central coordinator. It receives fire events from the FireIncidentSubsystem, dispatches tasks to the DroneSubsystem, and collects drone responses. Using separate queues for incoming fire events, tasks, and responses, it ensures proper flow and timely handling of incidents.
 
-### DroneStateMachines (Main Class)
-The DroneStateMachines this main class demonstrates the state machine logic for the drone. It reads events from the file (located at `src/main/resources/fire_events.txt`), schedules them, and processes them by transitioning through various drone states. The simulation includes a fault condition based on specific event types.
+### DroneStateMachines (refactored to DroneSubsystem.java)
 
 ---
 
@@ -59,6 +58,8 @@ After compiling, run the main class (which is within the `controllers` package) 
 
 ```sh
 java -cp bin controllers.DroneStateMachines
+java -cp bin controllers.Scheduler
+java -cp bin controllers.FireIncidentSubsystem
 ```
 
 This will start the simulation by reading fire events from the file and processing them through the drone state machine.
@@ -78,8 +79,10 @@ Place this file in the `src/main/resources/` directory (or update the file path 
 
 ---
 
-## Expected Console Output
+## Expected Console Output (DroneSubsystem)
 ```
+Received packet: 14:03:15 3 FIRE_DETECTED High
+14:03:15 3 FIRE_DETECTED High
 Drone is idle and ready for new fire event
 
 State before: 
