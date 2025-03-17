@@ -58,7 +58,7 @@ javac -d bin -sourcepath src src/controllers/*.java src/models/*.java
 After compiling, run the main class (which is within the `controllers` package) using:
 
 ```sh
-java -cp bin controllers.DroneStateMachines
+java -cp bin controllers.DroneSubsystem
 ```
 
 This will start the simulation by reading fire events from the file and processing them through the drone state machine.
