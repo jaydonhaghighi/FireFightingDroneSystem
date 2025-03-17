@@ -797,48 +797,110 @@ public class DroneSubsystem {
      * Processes an event by scheduling it and executing the standard sequence of drone actions.
      */
     private static void processEvent(DroneSubsystem drone, FireEvent event) {
-        // Add a small processing delay to simulate drone operations
+        // Simulate realistic drone operations with appropriate delays
         try {
             // Get zone location based on event
             int zoneId = event.getZoneID();
             Location zoneLocation = getZoneLocation(zoneId);
+            String severity = event.getSeverity();
+            
+            System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + 
+                            "] Starting mission to Zone " + zoneId + 
+                            " (" + zoneLocation + ") - Fire severity: " + severity + 
+                            ConsoleColors.RESET);
             
             // Update drone target location
             drone.setTargetLocation(zoneLocation);
             
-            // Schedule the fire event
+            // Schedule the fire event and prepare for takeoff
             drone.scheduleFireEvent(event);
-            Thread.sleep(500); // 0.5 sec delay
+            System.out.println(ConsoleColors.CYAN + "[DRONE " + drone.getDroneId() + 
+                            "] Preparing for takeoff..." + ConsoleColors.RESET);
+            Thread.sleep(1000); // 1 sec preparation delay
             
-            // Simulate movement to the fire zone
+            // Simulate movement to the fire zone (with realistic travel time based on distance)
+            System.out.println(ConsoleColors.BLUE + "[DRONE " + drone.getDroneId() + 
+                            "] Flying to target zone..." + ConsoleColors.RESET);
             simulateMovement(drone, zoneLocation);
+            
+            // Calculate firefighting duration based on severity
+            int firefightingDuration = calculateFirefightingDuration(severity);
+            
+            // Arrive at the zone and assess the situation
+            System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + 
+                            "] Arrived at Zone " + zoneId + 
+                            ", assessing fire situation..." + ConsoleColors.RESET);
+            Thread.sleep(2000); // 2 sec assessment time
             
             // Drop agent at target location
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
-            Thread.sleep(500); // 0.5 sec delay
+            System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + 
+                            "] Fighting fire in Zone " + zoneId + 
+                            " (estimated duration: " + (firefightingDuration/1000) + " seconds)" + 
+                            ConsoleColors.RESET);
+            Thread.sleep(firefightingDuration); // Variable duration based on severity
+            
+            // Fire extinguished
+            System.out.println(ConsoleColors.GREEN + "[DRONE " + drone.getDroneId() + 
+                            "] Fire successfully extinguished in Zone " + zoneId + 
+                            ConsoleColors.RESET);
             
             // Set target back to base and return
             drone.setTargetLocation(drone.getBaseLocation());
             drone.returningBack();
-            Thread.sleep(500); // 0.5 sec delay
+            System.out.println(ConsoleColors.BLUE + "[DRONE " + drone.getDroneId() + 
+                            "] Mission complete, returning to base..." + ConsoleColors.RESET);
+            Thread.sleep(1000); // 1 sec preparation for return
             
             // Handle faults if needed
             if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
                 drone.droneFaulted();
-                Thread.sleep(500); // 0.5 sec delay
+                System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + 
+                                "] WARNING: Drone malfunction detected!" + ConsoleColors.RESET);
+                Thread.sleep(3000); // 3 sec delay for handling fault
+                System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + 
+                                "] Emergency protocols engaged, attempting return..." + 
+                                ConsoleColors.RESET);
             }
             
-            // Simulate movement back to base
+            // Simulate movement back to base (possibly slower if faulted)
             simulateMovement(drone, drone.getBaseLocation());
             
-            // Complete the task
+            // Complete the task and perform maintenance
             drone.setCurrentLocation(drone.getBaseLocation());
+            System.out.println(ConsoleColors.GREEN + "[DRONE " + drone.getDroneId() + 
+                            "] Arrived at base, performing post-mission maintenance..." + 
+                            ConsoleColors.RESET);
+            Thread.sleep(2000); // 2 sec maintenance time
+            
             drone.taskCompleted();
+            System.out.println(ConsoleColors.GREEN + "[DRONE " + drone.getDroneId() + 
+                            "] Ready for next mission" + ConsoleColors.RESET);
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + "] Processing interrupted" + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + 
+                            "] Mission interrupted: " + e.getMessage() + ConsoleColors.RESET);
+        }
+    }
+    
+    /**
+     * Calculate firefighting duration based on fire severity
+     * 
+     * @param severity the fire severity
+     * @return duration in milliseconds
+     */
+    private static int calculateFirefightingDuration(String severity) {
+        switch (severity.toLowerCase()) {
+            case "high":
+                return 8000; // 8 seconds for high severity
+            case "moderate":
+                return 5000; // 5 seconds for moderate severity
+            case "low":
+                return 3000; // 3 seconds for low severity
+            default:
+                return 4000; // Default duration
         }
     }
     
@@ -857,6 +919,7 @@ public class DroneSubsystem {
     
     /**
      * Simulates drone movement from current location to target location
+     * with more realistic timing based on distance
      * 
      * @param drone the drone to move
      * @param targetLocation the target location
@@ -864,17 +927,31 @@ public class DroneSubsystem {
     private static void simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
         Location currentLocation = drone.getCurrentLocation();
         int distance = currentLocation.distanceTo(targetLocation);
+        boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");
+        
+        // Calculate travel time based on distance (speed: 10 units per second)
+        // Add penalty if drone is faulted
+        double baseSpeed = isFaulted ? 5.0 : 10.0; // units per second
+        int travelTimeMs = (int)(distance / baseSpeed * 1000);
+        
+        // Ensure minimum travel time
+        travelTimeMs = Math.max(travelTimeMs, 1000); // at least 1 second
         
         System.out.println(ConsoleColors.CYAN + 
             "[DRONE " + drone.getDroneId() + "] Moving from " + currentLocation + 
-            " to " + targetLocation + " (distance: " + distance + ")" + 
+            " to " + targetLocation + " (distance: " + distance + 
+            ", estimated travel time: " + (travelTimeMs / 1000.0) + " seconds)" + 
             ConsoleColors.RESET);
         
         // If locations are the same, no movement needed
         if (distance == 0) return;
         
+        // Determine number of steps for visualization
+        // More steps for longer distances, but cap at reasonable number
+        int steps = Math.min(Math.max(3, distance / 5), 10);
+        int stepDelayMs = travelTimeMs / steps;
+        
         // Simulate movement in steps
-        int steps = Math.min(distance, 5); // Max 5 steps for visualization
         for (int i = 1; i <= steps; i++) {
             // Calculate intermediate position
             int x = currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * i / steps;
@@ -887,11 +964,25 @@ public class DroneSubsystem {
             // Send status update to scheduler
             drone.sendStatusUpdate();
             
-            // Short delay between movement steps
-            Thread.sleep(200);
+            // Display progress message for longer journeys
+            if (distance > 20 && (i == steps/2 || i == steps/4 || i == 3*steps/4)) {
+                int progressPercent = (i * 100) / steps;
+                System.out.println(ConsoleColors.BLUE + 
+                    "[DRONE " + drone.getDroneId() + "] Flight progress: " + progressPercent + "%, " +
+                    "current location: " + intermediateLocation + 
+                    ConsoleColors.RESET);
+            }
+            
+            // Delay between movement steps
+            Thread.sleep(stepDelayMs);
         }
         
         // Ensure final position is exactly the target
         drone.setCurrentLocation(targetLocation);
+        drone.sendStatusUpdate();
+        
+        System.out.println(ConsoleColors.CYAN + 
+            "[DRONE " + drone.getDroneId() + "] Arrived at destination: " + targetLocation + 
+            ConsoleColors.RESET);
     }
 }

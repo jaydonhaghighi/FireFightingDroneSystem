@@ -3,6 +3,7 @@ package controllers;
 import models.DroneStatus;
 import models.FireEvent;
 import models.Location;
+import models.Zone;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.io.*;
@@ -238,55 +239,108 @@ public class Scheduler {
      */
     /**
      * Processes the next fire event in the queue and assigns it to the most appropriate drone
+     * with realistic decision making delays
      */
     public void getDroneTask() {
         if (!events.isEmpty()) {
             FireEvent event = events.peek(); // Don't remove yet until we find a drone
             
-            // Select best drone for this event
-            DroneStatus bestDrone = droneManager.selectBestDroneForEvent(event);
-            
-            if (bestDrone != null) {
-                // Remove event from queue since we found a drone
-                events.poll();
-                
-                // Get the zone location
+            try {
+                // Log incoming fire alert
                 int zoneId = event.getZoneID();
+                String severity = event.getSeverity();
+                
+                System.out.println(SchedulerColors.YELLOW + "\n[SCHEDULER] ALERT: Processing fire in zone " + 
+                                 zoneId + " with " + severity + " severity" + SchedulerColors.RESET);
+                
+                // Simulate the emergency assessment process
+                System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Assessing emergency severity and zone access..." + 
+                                 SchedulerColors.RESET);
+                Thread.sleep(1000); // 1 second for emergency assessment
+                
+                // Get the zone information
                 Location zoneLocation = droneManager.getLocationForZone(zoneId);
                 
-                // Update fire status in zone
-                droneManager.updateZoneFireStatus(zoneId, true, event.getSeverity());
+                // Display emergency details
+                System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Fire reported in Zone " + zoneId + 
+                                 " at " + zoneLocation + 
+                                 ", severity: " + severity + SchedulerColors.RESET);
                 
-                // Log the assignment
-                String droneId = bestDrone.getDroneId();
-                System.out.println(SchedulerColors.GREEN + "[SCHEDULER] Assigning fire in zone " + zoneId + 
-                                 " (" + zoneLocation + ") to " + droneId + 
-                                 " currently at " + bestDrone.getCurrentLocation() + 
-                                 " (distance: " + bestDrone.distanceTo(zoneLocation) + ")" + 
+                // Simulate drone fleet assessment
+                System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Analyzing available drone fleet and calculating optimal response..." + 
                                  SchedulerColors.RESET);
+                Thread.sleep(1500); // 1.5 seconds for drone selection analysis
                 
-                // Send to the selected drone
-                sendToDrone(event, droneId);
+                // Select best drone for this event
+                DroneStatus bestDrone = droneManager.selectBestDroneForEvent(event);
                 
-                // Update drone status with the new task
-                droneManager.updateDroneStatus(droneId, bestDrone.getState(), 
-                                             bestDrone.getCurrentLocation(), event);
-            } else {
-                System.out.println(SchedulerColors.YELLOW + "[SCHEDULER] No available drones for fire in zone " + 
-                                 event.getZoneID() + ". Keeping in queue." + SchedulerColors.RESET);
-                
-                // Add a small wait to prevent tight loop
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                if (bestDrone != null) {
+                    // Remove event from queue since we found a drone
+                    events.poll();
+                    
+                    // Update fire status in zone
+                    droneManager.updateZoneFireStatus(zoneId, true, event.getSeverity());
+                    
+                    // Prepare mission parameters
+                    String droneId = bestDrone.getDroneId();
+                    int distance = bestDrone.distanceTo(zoneLocation);
+                    double estimatedResponseTime = distance / 10.0; // Assuming 10 units/second speed
+                    
+                    // Log the drone selection decision
+                    System.out.println(SchedulerColors.GREEN + "[SCHEDULER] Selected " + droneId + 
+                                     " for Zone " + zoneId + " fire response:" + SchedulerColors.RESET);
+                    System.out.println(SchedulerColors.GREEN + "  - Drone location: " + bestDrone.getCurrentLocation() + 
+                                     "\n  - Zone location: " + zoneLocation + 
+                                     "\n  - Distance: " + distance + " units" + 
+                                     "\n  - Est. travel time: " + String.format("%.1f", estimatedResponseTime) + " seconds" + 
+                                     "\n  - Previous missions: " + bestDrone.getZonesServiced() + 
+                                     SchedulerColors.RESET);
+                    
+                    // Simulate mission preparation
+                    System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Preparing mission parameters and flight plan..." + 
+                                     SchedulerColors.RESET);
+                    Thread.sleep(1000); // 1 second for mission preparation
+                    
+                    // Send to the selected drone
+                    System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Transmitting mission to " + droneId + "..." + 
+                                     SchedulerColors.RESET);
+                    sendToDrone(event, droneId);
+                    Thread.sleep(500); // 0.5 seconds for transmission
+                    
+                    // Update drone status with the new task
+                    droneManager.updateDroneStatus(droneId, bestDrone.getState(), 
+                                                 bestDrone.getCurrentLocation(), event);
+                    
+                    System.out.println(SchedulerColors.GREEN + "[SCHEDULER] Mission successfully assigned to " + 
+                                     droneId + SchedulerColors.RESET);
+                } else {
+                    // No available drones
+                    System.out.println(SchedulerColors.YELLOW + "[SCHEDULER] No available drones for fire in zone " + 
+                                     zoneId + ". Keeping in queue." + SchedulerColors.RESET);
+                    
+                    // Display queue status
+                    System.out.println(SchedulerColors.YELLOW + "[SCHEDULER] Current queue size: " + 
+                                     events.size() + " events waiting" + SchedulerColors.RESET);
+                    
+                    // Add a wait to simulate periodic rechecking
+                    System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Will reassess availability in 2 seconds..." + 
+                                     SchedulerColors.RESET);
+                    Thread.sleep(2000);
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println(SchedulerColors.RED + "[SCHEDULER] Processing interrupted" + SchedulerColors.RESET);
             }
         } else {
-            System.out.println(SchedulerColors.CYAN + "[SCHEDULER] No fire events in queue to send to drone" + SchedulerColors.RESET);
-            // Add a small wait here to prevent tight loop when no events
+            // No events in queue
+            System.out.println(SchedulerColors.CYAN + "[SCHEDULER] No fire events in queue, system on standby" + 
+                             SchedulerColors.RESET);
+            
+            // Add a longer wait in standby mode
             try {
-                Thread.sleep(500);
+                System.out.println(SchedulerColors.CYAN + "[SCHEDULER] Performing routine system scan..." + 
+                                 SchedulerColors.RESET);
+                Thread.sleep(3000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -301,6 +355,76 @@ public class Scheduler {
         for (DroneStatus drone : allDrones) {
             System.out.println(SchedulerColors.CYAN + "  " + drone + SchedulerColors.RESET);
         }
+        System.out.println();
+    }
+    
+    /**
+     * Prints a visual representation of the zones and drones
+     */
+    public void visualizeZonesAndDrones() {
+        System.out.println(SchedulerColors.CYAN + "\n[SCHEDULER] Zone and Drone Visualization:" + SchedulerColors.RESET);
+        
+        // Get all zones
+        Map<Integer, Zone> zones = droneManager.getAllZones();
+        if (zones.isEmpty()) {
+            System.out.println(SchedulerColors.RED + "  No zones defined!" + SchedulerColors.RESET);
+            return;
+        }
+        
+        // Find the bounds of all zones to determine display area
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+        
+        for (Zone zone : zones.values()) {
+            minX = Math.min(minX, zone.getTopLeft().getX());
+            minY = Math.min(minY, zone.getTopLeft().getY());
+            maxX = Math.max(maxX, zone.getBottomRight().getX());
+            maxY = Math.max(maxY, zone.getBottomRight().getY());
+        }
+        
+        // Pad the display area
+        minX = Math.max(0, minX - 5);
+        minY = Math.max(0, minY - 5);
+        maxX += 5;
+        maxY += 5;
+        
+        // Get all drones
+        Collection<DroneStatus> drones = droneManager.getAllDrones();
+        
+        // Display summary
+        System.out.println(SchedulerColors.YELLOW + "  Map area: (" + minX + "," + minY + ") to (" + 
+                         maxX + "," + maxY + ")" + SchedulerColors.RESET);
+        System.out.println(SchedulerColors.YELLOW + "  Zones: " + zones.size() + 
+                         ", Drones: " + drones.size() + SchedulerColors.RESET);
+        
+        // Display legend
+        System.out.println(SchedulerColors.YELLOW + "  Legend:" + SchedulerColors.RESET);
+        System.out.println(SchedulerColors.GREEN + "    Zone Center: Z#" + SchedulerColors.RESET);
+        System.out.println(SchedulerColors.RED + "    Zone with Fire: F#" + SchedulerColors.RESET);
+        System.out.println(SchedulerColors.BLUE + "    Drone: D#" + SchedulerColors.RESET);
+        
+        // Display zones
+        System.out.println(SchedulerColors.CYAN + "\n  Zones:" + SchedulerColors.RESET);
+        for (Zone zone : zones.values()) {
+            String status = zone.hasFire() 
+                ? SchedulerColors.RED + "FIRE(" + zone.getSeverity() + ")" + SchedulerColors.RESET
+                : "NO FIRE";
+            System.out.println(SchedulerColors.YELLOW + "    Zone " + zone.getId() + ": " + 
+                             zone.getTopLeft() + " to " + zone.getBottomRight() + 
+                             " (center: " + zone.getLocation() + "), " + status + SchedulerColors.RESET);
+        }
+        
+        // Display drones
+        System.out.println(SchedulerColors.CYAN + "\n  Drones:" + SchedulerColors.RESET);
+        for (DroneStatus drone : drones) {
+            String assignedZone = drone.getCurrentTask() != null 
+                ? "Assigned to Zone " + drone.getCurrentTask().getZoneID() 
+                : "No assignment";
+            System.out.println(SchedulerColors.BLUE + "    Drone " + drone.getDroneId() + 
+                             ": " + drone.getCurrentLocation() + ", State: " + drone.getState() + 
+                             ", " + assignedZone + SchedulerColors.RESET);
+        }
+        
         System.out.println();
     }
     
@@ -342,6 +466,7 @@ public class Scheduler {
             
             System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Starting to process messages" + SchedulerColors.RESET);
             printDroneStatus();
+            visualizeZonesAndDrones();
             
             while (true) {
                 // Check for both fire events and drone status updates
@@ -355,6 +480,9 @@ public class Scheduler {
                     
                     // Print current drone status whenever a new fire event arrives
                     printDroneStatus();
+                    
+                    // Visualize zones and drones
+                    visualizeZonesAndDrones();
                 }
                 
                 // Brief pause to prevent tight loop

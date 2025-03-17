@@ -108,10 +108,37 @@ public class FireIncidentSubsystem {
                 send(event);
                 receive();
                 
-                // Add 2-second delay between each fire event
+                // Add variable delays between fire events to simulate realistic timing
                 try {
-                    System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] Waiting 2 seconds before sending next event..." + FireSystemColors.RESET);
-                    Thread.sleep(2000);
+                    // Calculate a more realistic delay based on severity
+                    int delaySeconds;
+                    
+                    switch (severity) {
+                        case "high":
+                            delaySeconds = 6; // High severity fires happen more frequently
+                            break;
+                        case "moderate":
+                            delaySeconds = 10; // Moderate severity fires less frequent
+                            break;
+                        case "low":
+                            delaySeconds = 15; // Low severity fires are most spaced out
+                            break;
+                        default:
+                            delaySeconds = 8; // Default case
+                    }
+                    
+                    // Display countdown to next fire
+                    System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] Next fire event in " + delaySeconds + 
+                                     " seconds..." + FireSystemColors.RESET);
+                    
+                    // Sleep with periodic updates
+                    for (int i = delaySeconds; i > 0; i -= 2) {
+                        Thread.sleep(2000); // Sleep 2 seconds at a time
+                        if (i > 2) {
+                            System.out.println(FireSystemColors.CYAN + "[FIRE SYSTEM] " + (i-2) + 
+                                             " seconds until next fire event..." + FireSystemColors.RESET);
+                        }
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
