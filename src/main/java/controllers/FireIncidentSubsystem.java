@@ -9,6 +9,20 @@ import java.io.IOException;
 import java.net.*;
 
 /**
+ * ANSI colors for console output
+ */
+class FireSystemColors {
+    // Colors
+    static final String RESET = "\u001B[0m";
+    static final String RED = "\u001B[31m";
+    static final String GREEN = "\u001B[32m";
+    static final String YELLOW = "\u001B[33m";
+    static final String BLUE = "\u001B[34m";
+    static final String PURPLE = "\u001B[35m";
+    static final String CYAN = "\u001B[36m";
+}
+
+/**
  * The FireIncidentSubsystem reads fire event data from a file and sends it to the Scheduler.
  * It also listens for responses from the Scheduler regarding dispatched fire events.
  */
@@ -50,10 +64,9 @@ public class FireIncidentSubsystem {
             System.out.println("receieve error: " + e);
         }
 
-        System.out.print("Received response: ");
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-        System.out.print(r);
+        System.out.println(FireSystemColors.GREEN + "[FIRE SYSTEM] Received response: " + FireSystemColors.YELLOW + r + FireSystemColors.RESET);
     }
 
     public void send(FireEvent fire) {
@@ -64,7 +77,7 @@ public class FireIncidentSubsystem {
         } catch (UnknownHostException e) {
             System.out.println("Error: cannot find host: " + e);
         }
-        System.out.println("Sending fire: " + message);
+        System.out.println(FireSystemColors.GREEN + "[FIRE SYSTEM] Sending fire: " + FireSystemColors.YELLOW + message + FireSystemColors.RESET);
         try {
             sendSocket.send(sendPacket);
         } catch (IOException e) {
@@ -104,9 +117,21 @@ public class FireIncidentSubsystem {
     public static void main(String[] args){
         try{
             InetAddress ip = InetAddress.getLocalHost();
-            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("C:\\Users\\brabo\\Desktop\\FireFightingDroneSystem-main\\src\\main\\resources\\fire_events.txt", ip);
+            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
+            
+            // Read all fire events from the file
             FireEvent fire = fireSystem.readFile();
-        } catch (UnknownHostException e) {}
-
+            
+            // After sending all events, keep listening for responses
+            System.out.println(FireSystemColors.CYAN + "\n[FIRE SYSTEM] All fire events sent. Waiting for responses..." + FireSystemColors.RESET);
+            while (true) {
+                fireSystem.receive();
+            }
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Error in FireIncidentSubsystem main: " + e);
+            e.printStackTrace();
+        }
     }
 }

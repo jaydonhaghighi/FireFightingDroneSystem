@@ -9,6 +9,20 @@ import java.util.*;
 import static models.FireEvent.createFireEventFromString;
 
 /**
+ * ANSI colors for console output
+ */
+class SchedulerColors {
+    // Colors
+    static final String RESET = "\u001B[0m";
+    static final String RED = "\u001B[31m";
+    static final String GREEN = "\u001B[32m";
+    static final String YELLOW = "\u001B[33m";
+    static final String BLUE = "\u001B[34m";
+    static final String PURPLE = "\u001B[35m";
+    static final String CYAN = "\u001B[36m";
+}
+
+/**
  * The Scheduler class manages the flow of fire incident events and drone responses.
  * It processes incoming fire events, assigns them to drones, and forwards drone responses
  * to the FireIncidentSubsystem
@@ -45,11 +59,16 @@ public class Scheduler {
             System.out.println("receieve error: " + e);
         }
 
-        System.out.print("Received packet: ");
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-        System.out.println(r);
-        return createFireEventFromString(r);
+        System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Received packet: " + SchedulerColors.YELLOW + r + SchedulerColors.RESET);
+        
+        try {
+            return createFireEventFromString(r);
+        } catch (Exception e) {
+            System.out.println(SchedulerColors.RED + "[SCHEDULER] Warning: Received a message that could not be parsed as a FireEvent: " + r + SchedulerColors.RESET);
+            return null;
+        }
     }
 
     /**
@@ -68,7 +87,7 @@ public class Scheduler {
         } catch (UnknownHostException e) {
             System.out.println("Error: cannot find host: " + e);
         }
-        System.out.println("Sending to " + what + " to " + location + ": " + message);
+        System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Sending " + what + " to " + location + ": " + SchedulerColors.YELLOW + message + SchedulerColors.RESET);
         try {
             sendSocket.send(sendPacket);
         } catch (IOException e) {
@@ -77,12 +96,16 @@ public class Scheduler {
     }
 
     /**
-     * Recieves a fire event from the FireIncidentSubsystem and adds it to the queue.
+     * Receives a fire event from the FireIncidentSubsystem and adds it to the queue.
      */
     public void receiveFireEvent() {
         FireEvent fire = receive();
-        events.add(fire);
-        send(fire, 5001, "response", "Fire Incident system");
+        
+        // Only process if we received a valid fire event
+        if (fire != null) {
+            events.add(fire);
+            send(fire, 5001, "response", "Fire Incident system");
+        }
     }
 
     // Scheduler -> DroneSubsystem
@@ -156,17 +179,39 @@ public class Scheduler {
      */
     public void getDroneTask() {
         if (!events.isEmpty()) {
-            send(events.poll(), 7001, "fire info", "Drone");
+            FireEvent event = events.poll();
+            send(event, 7001, "fire info", "Drone");
+        } else {
+            System.out.println(SchedulerColors.CYAN + "[SCHEDULER] No fire events in queue to send to drone" + SchedulerColors.RESET);
+            // Could add a small wait here to prevent tight loop when no events
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
     public static void main(String[] args) {
         try{
             InetAddress ip = InetAddress.getLocalHost();
             Scheduler scheduler = new Scheduler(ip);
-            scheduler.receiveFireEvent();
-            scheduler.getDroneTask();
-            scheduler.receiveFireEvent();
-            scheduler.getDroneTask();
-        } catch (UnknownHostException e) {}
+            
+            // Continuously process fire events
+            while (true) {
+                // Receive a fire event from FireIncidentSubsystem
+                scheduler.receiveFireEvent();
+                
+                // Send to drone for processing
+                scheduler.getDroneTask();
+                
+                // Can add a small delay here if needed
+                // Thread.sleep(100);
+            }
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Error in Scheduler main: " + e);
+            e.printStackTrace();
+        }
     }
 }
