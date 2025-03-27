@@ -90,6 +90,7 @@ public class FireIncidentSubsystem {
      * It continuously waits for and handles responses from the Scheduler.
      */
     public FireEvent readFile() {
+        boolean error = false;
         // reads file (fire_events.txt)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
@@ -98,12 +99,19 @@ public class FireIncidentSubsystem {
             while ((line = br.readLine()) != null) {
                 // split line by space
                 String[] parts = line.split(" ");
+
+                if (parts.length > 4) {
+                    if (parts[4].equals("ERROR")) {
+                        error = true;
+                    }
+                }
+
                 String time = parts[0];
                 int zoneID = Integer.parseInt(parts[1]);
                 String eventType = parts[2];
                 String severity = parts[3];
 
-                FireEvent event = new FireEvent(time, zoneID, eventType, severity);
+                FireEvent event = new FireEvent(time, zoneID, eventType, severity, error);
 
                 send(event);
                 receive();
@@ -136,6 +144,7 @@ public class FireIncidentSubsystem {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
+                error = false;
             }
         } catch (IOException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
