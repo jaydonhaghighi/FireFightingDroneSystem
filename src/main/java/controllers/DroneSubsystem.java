@@ -90,6 +90,7 @@ class Idle implements DroneState {
 
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
+        //check if for error type here (I think)
         System.out.println("preparing to handle new fire event: " + event);
         context.setState(new EnRoute());
     }
