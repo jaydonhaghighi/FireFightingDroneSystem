@@ -1,5 +1,7 @@
 package models;
 
+import java.util.*;
+
 public class FireEvent {
     /**The time at which the fire event occurred*/
     String time;
@@ -12,6 +14,12 @@ public class FireEvent {
     /**The ID of the drone assigned to handle this event*/
     String assignedDroneId;
 
+    ErrorType error;
+
+    public enum ErrorType {
+        DRONE_STUCK, NOZZLE_JAM, DOOR_STUCK, ARRIVAL_SENSOR_FAILED, NONE
+    }
+
     /**
      * Constructors a FireEvent with the specified parameters below
      * @param time The time at which the fire event occurred
@@ -19,12 +27,21 @@ public class FireEvent {
      * @param eventType The type of fire event
      * @param severity The severity level of the fire event(e.g. High, Medium, Low
      */
-    public FireEvent(String time, int zoneID, String eventType, String severity) {
+    public FireEvent(String time, int zoneID, String eventType, String severity, boolean error) {
         this.time = time;
         this.zoneID = zoneID;
         this.eventType = eventType;
         this.severity = severity;
         this.assignedDroneId = null;
+
+
+        if (error) {
+            ErrorType[] errorTypes = ErrorType.values();
+            int randomI = new Random().nextInt(errorTypes.length - 1);
+            this.error = errorTypes[randomI];
+        } else {
+            this.error = ErrorType.NONE;
+        }
     }
 
     public String getTime() {
@@ -58,6 +75,15 @@ public class FireEvent {
     public void setSeverity(String severity) {
         this.severity = severity;
     }
+
+    public ErrorType getError() { return error; }
+
+    public boolean hasError() {
+        if (error != ErrorType.NONE) {
+            return true;
+        }
+        return false;
+    }
     
     /**
      * Gets the ID of the drone assigned to this event
@@ -84,7 +110,7 @@ public class FireEvent {
         String severity = parts[3];
 
         // Create the new FireEvent object
-        FireEvent event = new FireEvent(time, zoneID, eventType, severity);
+        FireEvent event = new FireEvent(time, zoneID, eventType, severity, false);
         
         // Check if a drone ID is included
         if (parts.length > 4) {
@@ -101,9 +127,9 @@ public class FireEvent {
     @Override
     public String toString() {
         if (assignedDroneId != null) {
-            return time + " " + zoneID + " " + eventType + " " + severity + " " + assignedDroneId;
+            return time + " " + zoneID + " " + eventType + " " + severity + " " + assignedDroneId + " " + error;
         } else {
-            return time + " " + zoneID + " " + eventType + " " + severity;
+            return time + " " + zoneID + " " + eventType + " " + severity + " " + error;
         }
     }
 }
