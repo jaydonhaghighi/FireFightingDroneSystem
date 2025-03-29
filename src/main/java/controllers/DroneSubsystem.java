@@ -773,48 +773,39 @@ public class DroneSubsystem {
      * */
     public static void main(String[] args) {
         try {
-            // Create multiple drones with different IDs, locations, and specifications
+            // Create a shared specification object for all drones
+            DroneSpecifications droneSpecs = new DroneSpecifications();
             
-            // Standard drone with default specifications - base at coordinates (100, 100) meters
-            DroneSubsystem drone1 = new DroneSubsystem(InetAddress.getLocalHost(), "drone1", new Location(100, 100));
+            // Number of drones to create
+            final int NUM_DRONES = 10;
             
-            // Fast drone with high speed but lower flow rate - base at coordinates (1050, 100) meters
-            DroneSpecifications fastDroneSpecs = new DroneSpecifications(
-                80.0,      // maxSpeed: 80 km/h (faster drone)
-                600,       // timeToOpenNozzle: 600 ms (slower nozzle)
-                2.0,       // flowRate: 2.0 litres/s (lower flow rate)
-                20.0,      // carryCapacity: 20.0 litres (lower capacity)
-                25,        // batteryLife: 25 minutes
-                5.0,       // acceleration: 5.0 m/s² (better acceleration)
-                6.0        // deceleration: 6.0 m/s² (better deceleration)
-            );
-            DroneSubsystem drone2 = new DroneSubsystem(InetAddress.getLocalHost(), "drone2", new Location(1050, 100), fastDroneSpecs);
+            // Arrays to store drone objects and threads
+            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
+            Thread[] threads = new Thread[NUM_DRONES];
             
-            // Heavy-duty drone with high flow rate but lower speed - base at coordinates (2000, 100) meters
-            DroneSpecifications heavyDutySpecs = new DroneSpecifications(
-                40.0,      // maxSpeed: 40 km/h (slower but more stable)
-                300,       // timeToOpenNozzle: 300 ms (faster nozzle)
-                6.0,       // flowRate: 6.0 litres/s (higher flow rate)
-                45.0,      // carryCapacity: 45.0 litres (higher capacity)
-                40,        // batteryLife: 40 minutes
-                3.0,       // acceleration: 3.0 m/s² (lower acceleration)
-                4.0        // deceleration: 4.0 m/s² (lower deceleration)
-            );
-            DroneSubsystem drone3 = new DroneSubsystem(InetAddress.getLocalHost(), "drone3", new Location(2000, 100), heavyDutySpecs);
+            // Create drones and threads in a loop
+            for (int i = 0; i < NUM_DRONES; i++) {
+                // Create drone with ID "drone1" through "drone10"
+                String droneId = "drone" + (i + 1);
+                
+                // All drones start at same base location (0, 0)
+                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, new Location(0, 0), droneSpecs);
+                
+                // Create a thread for each drone
+                final int droneIndex = i; // Need final var for lambda
+                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
+                
+                // Start the thread
+                threads[i].start();
+                
+                // Larger delay between drone starts to avoid port conflicts
+                Thread.sleep(500);
+            }
             
-            // Start each drone in its own thread
-            Thread thread1 = new Thread(() -> runDrone(drone1));
-            Thread thread2 = new Thread(() -> runDrone(drone2));
-            Thread thread3 = new Thread(() -> runDrone(drone3));
-            
-            thread1.start();
-            thread2.start();
-            thread3.start();
-            
-            // Wait for all threads to complete (they won't normally unless exception occurs)
-            thread1.join();
-            thread2.join();
-            thread3.join();
+            // Wait for all threads to complete
+            for (int i = 0; i < NUM_DRONES; i++) {
+                threads[i].join();
+            }
             
         } catch (UnknownHostException e) {
             e.printStackTrace();

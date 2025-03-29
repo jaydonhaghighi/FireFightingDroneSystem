@@ -54,10 +54,12 @@ public class Scheduler {
         Location baseLocation = new Location(0, 0);
         this.droneManager = new DroneManager(baseLocation);
         
-        // Register drone ports using the same calculation as in DroneSubsystem
-        registerDronePort("drone1", 7001 + (1 * 100)); // 7101
-        registerDronePort("drone2", 7001 + (2 * 100)); // 7201
-        registerDronePort("drone3", 7001 + (3 * 100)); // 7301
+        // Register drone ports for 10 drones using the same calculation as in DroneSubsystem
+        for (int i = 1; i <= 10; i++) {
+            String droneId = "drone" + i;
+            int port = 7001 + (i * 100); // Same calculation as DroneSubsystem uses
+            registerDronePort(droneId, port);
+        }
         
         try {
             sendSocket = new DatagramSocket(sendPort);
