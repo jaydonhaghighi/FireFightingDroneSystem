@@ -1,12 +1,15 @@
 package controllers;
 
 
+import models.DroneSpecifications;
 import models.FireEvent;
 import models.Location;
 
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.net.*;
 
 import static models.FireEvent.createFireEventFromString;
@@ -90,6 +93,7 @@ class Idle implements DroneState {
 
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
+        //check if for error type here (I think)
         System.out.println("preparing to handle new fire event: " + event);
         context.setState(new EnRoute());
     }
@@ -456,11 +460,15 @@ class Fault implements DroneState{
 public class DroneSubsystem {
     //current state of drone
     private DroneState currentState;
-    private Queue<FireEvent> fireEventQueue; // Queue for fire events
-    private String droneId; // Unique identifier for this drone
-    private Location currentLocation; // Current physical location
-    private Location targetLocation; // Target location for movement
-    private Location baseLocation; // Home base location
+    private Queue<FireEvent> fireEventQueue;
+    private String droneId;
+    private Location currentLocation; // current physical location
+    private Location targetLocation; // target location for movement
+    private Location baseLocation; // home base location
+    private DroneSpecifications specifications; // specifications of drone
+    
+    // map to track drops by zone ID
+    private static final Map<Integer, Integer> zoneDropsMap = new ConcurrentHashMap<>();
 
     private final InetAddress serverIP;
 
@@ -485,7 +493,18 @@ public class DroneSubsystem {
      * @param baseLocation The location of the drone's home base
      */
     public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation) {
-        //set the initial state of drone
+        this(serverIP, droneId, baseLocation, new DroneSpecifications());
+    }
+    
+    /**
+     * Constructor with drone ID, base location, and specifications
+     * @param serverIP The IP address of the scheduler server
+     * @param droneId The unique identifier for this drone
+     * @param baseLocation The location of the drone's home base
+     * @param specifications The technical specifications of the drone
+     */
+    public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation, DroneSpecifications specifications) {
+        // set the initial state of drone
         currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
         this.serverIP = serverIP;
@@ -493,16 +512,16 @@ public class DroneSubsystem {
         this.baseLocation = baseLocation;
         this.currentLocation = baseLocation;
         this.targetLocation = baseLocation;
+        this.specifications = specifications;
         
         try {
-            // Create more predictable unique ports for each drone
+            // Create unique ports for each drone
             int droneNumber = 0;
             if (droneId.length() > 5) {
-                // Extract drone number from the ID (e.g. "drone1" -> 1)
                 droneNumber = Integer.parseInt(droneId.substring(5));
             }
             
-            // Use offset of 100 * droneNumber to ensure ports don't conflict
+            // use offset of 100 * droneNumber to ensure ports don't conflict
             int uniqueSendPort = sendPort + (droneNumber * 100);
             int uniqueReceivePort = receivePort + (droneNumber * 100);
             
@@ -512,6 +531,13 @@ public class DroneSubsystem {
             System.out.println(ConsoleColors.CYAN + 
                 "[DRONE " + droneId + "] Initialized at " + baseLocation + 
                 " using ports: send=" + uniqueSendPort + ", receive=" + uniqueReceivePort + 
+                ConsoleColors.RESET);
+                
+            // display drone specifications
+            System.out.println(ConsoleColors.CYAN + 
+                "[DRONE " + droneId + "] Specifications: Max Speed=" + specifications.getMaxSpeed() + 
+                " km/h, Flow Rate=" + specifications.getFlowRate() + " L/s, Capacity=" + 
+                specifications.getCarryCapacity() + " L, Battery Life=" + specifications.getBatteryLife() + " min" +
                 ConsoleColors.RESET);
         } catch (SocketException e) {
             System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Socket error: " + e.getMessage() + ConsoleColors.RESET);
@@ -729,28 +755,81 @@ public class DroneSubsystem {
     }
     
     /**
+     * Gets the drone's specifications
+     * 
+     * @return the drone specifications
+     */
+    public DroneSpecifications getSpecifications() {
+        return specifications;
+    }
+    
+    /**
+     * Sets the drone's specifications
+     * 
+     * @param specifications the new specifications
+     */
+    public void setSpecifications(DroneSpecifications specifications) {
+        this.specifications = specifications;
+    }
+    
+    /**
+     * Records a drop for a zone and returns the current count
+     * 
+     * @param zoneId the zone ID where drop occurred
+     * @return the updated drop count for the zone
+     */
+    public static int recordDropForZone(int zoneId) {
+        return zoneDropsMap.compute(zoneId, (key, value) -> (value == null) ? 1 : value + 1);
+    }
+    
+    /**
+     * Gets the current drop count for a zone
+     * 
+     * @param zoneId the zone ID
+     * @return the number of drops for the zone, or 0 if none
+     */
+    public static int getDropsForZone(int zoneId) {
+        return zoneDropsMap.getOrDefault(zoneId, 0);
+    }
+    
+    /**
      * Main program for droneStateMachines
      * */
     public static void main(String[] args) {
         try {
-            // Create multiple drones with different IDs and locations
-            DroneSubsystem drone1 = new DroneSubsystem(InetAddress.getLocalHost(), "drone1", new Location(0, 0));
-            DroneSubsystem drone2 = new DroneSubsystem(InetAddress.getLocalHost(), "drone2", new Location(10, 10));
-            DroneSubsystem drone3 = new DroneSubsystem(InetAddress.getLocalHost(), "drone3", new Location(20, 20));
+            // Create a shared specification object for all drones
+            DroneSpecifications droneSpecs = new DroneSpecifications();
             
-            // Start each drone in its own thread
-            Thread thread1 = new Thread(() -> runDrone(drone1));
-            Thread thread2 = new Thread(() -> runDrone(drone2));
-            Thread thread3 = new Thread(() -> runDrone(drone3));
+            // Number of drones to create
+            final int NUM_DRONES = 10;
             
-            thread1.start();
-            thread2.start();
-            thread3.start();
+            // Arrays to store drone objects and threads
+            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
+            Thread[] threads = new Thread[NUM_DRONES];
             
-            // Wait for all threads to complete (they won't normally unless exception occurs)
-            thread1.join();
-            thread2.join();
-            thread3.join();
+            // Create drones and threads in a loop
+            for (int i = 0; i < NUM_DRONES; i++) {
+                // Create drone with ID "drone1" through "drone10"
+                String droneId = "drone" + (i + 1);
+                
+                // All drones start at same base location (0, 0)
+                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, new Location(0, 0), droneSpecs);
+                
+                // Create a thread for each drone
+                final int droneIndex = i; // Need final var for lambda
+                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
+                
+                // Start the thread
+                threads[i].start();
+                
+                // Larger delay between drone starts to avoid port conflicts
+                Thread.sleep(500);
+            }
+            
+            // Wait for all threads to complete
+            for (int i = 0; i < NUM_DRONES; i++) {
+                threads[i].join();
+            }
             
         } catch (UnknownHostException e) {
             e.printStackTrace();
@@ -774,14 +853,30 @@ public class DroneSubsystem {
             while (true) {
                 FireEvent event = drone.receive();
                 
-                // Only process events assigned to this drone or with no assignment
-                String assignedDroneId = event.getAssignedDroneId();
-                if (assignedDroneId == null || assignedDroneId.equals(drone.getDroneId())) {
+                // Process events assigned to this drone (either as primary or as part of multi-drone response)
+                String primaryDroneId = event.getAssignedDroneId();
+                String thisDroneId = drone.getDroneId();
+                
+                // Check if this drone should respond - either it's assigned directly or it's one of multiple drones assigned
+                if (primaryDroneId == null || 
+                    primaryDroneId.equals(thisDroneId) || 
+                    event.isDroneAssigned(thisDroneId)) {
+                    
+                    // For multi-drone responses, indicate which response number this is
+                    if (event.getAssignedDroneCount() > 1) {
+                        System.out.println(ConsoleColors.CYAN + "[DRONE " + thisDroneId + 
+                                         "] Part of multi-drone response (" + 
+                                         event.getAssignedDroneCount() + " drones total)" + 
+                                         ConsoleColors.RESET);
+                    }
+                    
                     processEvent(drone, event);
                     // Send status update after event is processed
                     drone.sendStatusUpdate();
                 } else {
-                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + "] Ignoring event assigned to " + assignedDroneId + ConsoleColors.RESET);
+                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + thisDroneId + 
+                                     "] Ignoring event assigned to " + primaryDroneId + 
+                                     ConsoleColors.RESET);
                 }
             }
         } catch (Exception e) {
@@ -814,19 +909,35 @@ public class DroneSubsystem {
             // Fly to zone
             simulateMovement(drone, zoneLocation);
             
-            // Calculate firefighting duration based on severity
-            int firefightingDuration = calculateFirefightingDuration(severity);
+            // Calculate firefighting duration based on severity and drone specifications
+            int firefightingDuration = calculateFirefightingDuration(severity, drone);
             
             // Drop agent at target location
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
             System.out.println(ConsoleColors.RED + " DRONE " + droneId + ": Fighting fire in Zone " + zoneId +
-                           " (" + (firefightingDuration/1000) + "s)" + ConsoleColors.RESET);
+                           " (" + (firefightingDuration/1000) + "s, flow rate: " + 
+                           drone.getSpecifications().getFlowRate() + " L/s)" + ConsoleColors.RESET);
             Thread.sleep(firefightingDuration);
             
-            // Fire extinguished
-            System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
-                           ConsoleColors.RESET);
+            // Determine if fire is fully extinguished or if drone has contributed its capacity
+            int dronesNeeded = getRequiredDronesForSeverity(severity);
+            boolean fullCapacityUsed = true; // Assume drone used full capacity
+            
+            // Increment the drops counter for this zone
+            int dropCount = recordDropForZone(zoneId);
+            
+            if (dropCount >= dronesNeeded) {
+                // If enough drones were dispatched, fire would be fully extinguished
+                System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
+                               " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
+                               ConsoleColors.RESET);
+            } else {
+                // Show progress with drops count
+                System.out.println(ConsoleColors.YELLOW + "DRONE " + droneId + ": Fire partially contained in Zone " + zoneId +
+                               " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
+                               ConsoleColors.RESET);
+            }
             
             // Return to base
             drone.setTargetLocation(drone.getBaseLocation());
@@ -861,21 +972,32 @@ public class DroneSubsystem {
     }
     
     /**
-     * Calculate firefighting duration based on fire severity
+     * Calculate firefighting duration based on fire severity using drone specifications
      * 
      * @param severity the fire severity
+     * @param drone the drone to use for calculations
      * @return duration in milliseconds
      */
-    private static int calculateFirefightingDuration(String severity) {
+    private static int calculateFirefightingDuration(String severity, DroneSubsystem drone) {
+        // Use drone's specifications to calculate duration based on flow rate and nozzle open time
+        return drone.getSpecifications().calculateFirefightingDuration(severity);
+    }
+    
+    /**
+     * Determines the number of drones required to extinguish a fire based on severity
+     * 
+     * @param severity the fire severity
+     * @return the number of drones needed
+     */
+    private static int getRequiredDronesForSeverity(String severity) {
         switch (severity.toLowerCase()) {
             case "high":
-                return 8000; // 8 seconds for high severity
+                return 3; // 30L water needed
             case "moderate":
-                return 5000; // 5 seconds for moderate severity
+                return 2; // 20L water needed
             case "low":
-                return 3000; // 3 seconds for low severity
             default:
-                return 4000; // Default duration
+                return 1; // 10L water needed
         }
     }
     
@@ -883,17 +1005,17 @@ public class DroneSubsystem {
      * Gets a zone location based on zone ID
      * 
      * @param zoneId the zone ID
-     * @return the location of the zone
+     * @return the location of the zone center in meters
      */
     private static Location getZoneLocation(int zoneId) {
-        // Create a simple grid of zones for demonstration
-        int x = ((zoneId-1) % 3) * 10 + 10; // Create a 3x4 grid
-        int y = ((zoneId-1) / 3) * 10 + 10;
+        // Create a grid of 700m x 600m zones (3 columns, 4 rows)
+        int x = ((zoneId-1) % 3) * 700 + 350; // 700m wide zones, centered at x+350
+        int y = ((zoneId-1) / 3) * 600 + 300; // 600m tall zones, centered at y+300
         return new Location(x, y);
     }
     
     /**
-     * Simulates drone movement with simplified output
+     * Simulates drone movement with simplified output, using drone specifications
      * 
      * @param drone the drone to move
      * @param targetLocation the target location
@@ -907,9 +1029,25 @@ public class DroneSubsystem {
         // If locations are the same, no movement needed
         if (distance == 0) return;
         
-        // Calculate travel time based on distance and speed
-        double baseSpeed = isFaulted ? 5.0 : 10.0; // units per second
-        int travelTimeMs = Math.max((int)(distance / baseSpeed * 1000), 1000);
+        // Get drone specifications
+        DroneSpecifications specs = drone.getSpecifications();
+        
+        // Calculate travel time based on drone specs including acceleration/deceleration
+        double maxSpeed = isFaulted ? specs.getMaxSpeed() * 0.5 : specs.getMaxSpeed(); // Reduced speed if faulted
+        
+        // Temporarily modify specifications if drone is faulted
+        double originalMaxSpeed = specs.getMaxSpeed();
+        if (isFaulted) {
+            specs.setMaxSpeed(maxSpeed);
+        }
+        
+        // Calculate travel time using drone specs (includes acceleration/deceleration)
+        int travelTimeMs = specs.calculateTravelTime(distance);
+        
+        // Restore original max speed
+        if (isFaulted) {
+            specs.setMaxSpeed(originalMaxSpeed);
+        }
         
         // Show flight start status
         String destinationType = targetLocation.equals(drone.getBaseLocation()) ? "base" : "zone";
@@ -917,8 +1055,8 @@ public class DroneSubsystem {
         
         System.out.println(ConsoleColors.BLUE + 
             "DRONE " + droneId + ": Flying to " + destinationType + " (" +
-            distance + " units, " + String.format("%.1f", travelTimeMs/1000.0) + "s, " + 
-            speedStatus + ")" + ConsoleColors.RESET);
+            distance + " meters, " + String.format("%.1f", travelTimeMs/1000.0) + "s, " + 
+            speedStatus + ", max speed: " + maxSpeed + " km/h)" + ConsoleColors.RESET);
         
         // Determine number of updates (fewer updates for cleaner output)
         int steps = Math.min(3, distance / 10); // max 3 steps for any distance

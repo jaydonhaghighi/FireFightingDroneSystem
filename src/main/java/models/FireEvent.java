@@ -1,5 +1,7 @@
 package models;
 
+import java.util.*;
+
 public class FireEvent {
     /**The time at which the fire event occurred*/
     String time;
@@ -9,8 +11,20 @@ public class FireEvent {
     String eventType;
     /**The severity level of the fire event(e.g. High, Medium, Low*/
     String severity;
-    /**The ID of the drone assigned to handle this event*/
+    /**The ID of the primary drone assigned to handle this event*/
     String assignedDroneId;
+    
+    /**List of all drones assigned to this event (for multi-drone responses)*/
+    Set<String> assignedDrones = new HashSet<>();
+    
+    /**Count of completed agent drops for this fire*/
+    private int dropsCompleted = 0;
+
+    ErrorType error;
+
+    public enum ErrorType {
+        DRONE_STUCK, NOZZLE_JAM, DOOR_STUCK, ARRIVAL_SENSOR_FAILED, NONE
+    }
 
     /**
      * Constructors a FireEvent with the specified parameters below
@@ -19,12 +33,22 @@ public class FireEvent {
      * @param eventType The type of fire event
      * @param severity The severity level of the fire event(e.g. High, Medium, Low
      */
-    public FireEvent(String time, int zoneID, String eventType, String severity) {
+    public FireEvent(String time, int zoneID, String eventType, String severity, boolean error) {
         this.time = time;
         this.zoneID = zoneID;
         this.eventType = eventType;
         this.severity = severity;
         this.assignedDroneId = null;
+        this.assignedDrones = new HashSet<>();
+
+
+        if (error) {
+            ErrorType[] errorTypes = ErrorType.values();
+            int randomI = new Random().nextInt(errorTypes.length - 1);
+            this.error = errorTypes[randomI];
+        } else {
+            this.error = ErrorType.NONE;
+        }
     }
 
     public String getTime() {
@@ -58,6 +82,15 @@ public class FireEvent {
     public void setSeverity(String severity) {
         this.severity = severity;
     }
+
+    public ErrorType getError() { return error; }
+
+    public boolean hasError() {
+        if (error != ErrorType.NONE) {
+            return true;
+        }
+        return false;
+    }
     
     /**
      * Gets the ID of the drone assigned to this event
@@ -72,7 +105,48 @@ public class FireEvent {
      * @param droneId the ID of the drone to assign
      */
     public void assignDrone(String droneId) {
-        this.assignedDroneId = droneId;
+        this.assignedDroneId = droneId; // Keep for backward compatibility
+        this.assignedDrones.add(droneId); // Add to the set of all assigned drones
+    }
+    
+    /**
+     * Gets all drones assigned to this event
+     * @return set of assigned drone IDs
+     */
+    public Set<String> getAllAssignedDrones() {
+        return assignedDrones;
+    }
+    
+    /**
+     * Checks if a specific drone is assigned to this event
+     * @param droneId the drone ID to check
+     * @return true if the drone is assigned to this event
+     */
+    public boolean isDroneAssigned(String droneId) {
+        return assignedDrones.contains(droneId);
+    }
+    
+    /**
+     * Gets the number of drones assigned to this event
+     * @return the count of assigned drones
+     */
+    public int getAssignedDroneCount() {
+        return assignedDrones.size();
+    }
+    
+    /**
+     * Gets the number of agent drops completed for this fire
+     * @return the count of completed drops
+     */
+    public int getDropsCompleted() {
+        return dropsCompleted;
+    }
+    
+    /**
+     * Increments the number of agent drops completed for this fire
+     */
+    public void incrementDropsCompleted() {
+        this.dropsCompleted++;
     }
 
     public static FireEvent createFireEventFromString(String input) {
@@ -84,7 +158,7 @@ public class FireEvent {
         String severity = parts[3];
 
         // Create the new FireEvent object
-        FireEvent event = new FireEvent(time, zoneID, eventType, severity);
+        FireEvent event = new FireEvent(time, zoneID, eventType, severity, false);
         
         // Check if a drone ID is included
         if (parts.length > 4) {
@@ -100,10 +174,37 @@ public class FireEvent {
      */
     @Override
     public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(time).append(" ")
+          .append(zoneID).append(" ")
+          .append(eventType).append(" ")
+          .append(severity);
+          
+        // Add primary drone ID for backward compatibility
         if (assignedDroneId != null) {
-            return time + " " + zoneID + " " + eventType + " " + severity + " " + assignedDroneId;
-        } else {
-            return time + " " + zoneID + " " + eventType + " " + severity;
+            sb.append(" ").append(assignedDroneId);
         }
+        
+        // Add error information
+        sb.append(" ").append(error);
+        
+        return sb.toString();
+    }
+    
+    /**
+     * Returns a more detailed string representation including all assigned drones
+     * @return A formatted string containing the event details and all assigned drones
+     */
+    public String toDetailedString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("FireEvent{")
+          .append("time='").append(time).append("', ")
+          .append("zoneID=").append(zoneID).append(", ")
+          .append("severity='").append(severity).append("', ")
+          .append("drones=").append(assignedDrones).append(", ")
+          .append("error=").append(error)
+          .append("}");
+          
+        return sb.toString();
     }
 }
