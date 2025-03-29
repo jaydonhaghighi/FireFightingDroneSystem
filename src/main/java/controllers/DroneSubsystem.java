@@ -11,6 +11,8 @@ import java.net.*;
 
 import static models.FireEvent.createFireEventFromString;
 
+import static models.FireEvent.ErrorType;
+
 /**
  * ANSI colors for console output
  */
@@ -463,6 +465,13 @@ public class DroneSubsystem {
     private Location targetLocation; // Target location for movement
     private Location baseLocation; // Home base location
 
+    private long movementStartTime = 0;
+    private long dropAgentStartTime = 0;
+    private static final long MAX_MOVEMENT_TIME = 30000; //30 seconds max for movement
+    private static final long MAX_DROP_AGENT_TIME = 15000; // 15 seconds max for dropping agent
+    private ErrorType currentError = ErrorType.NONE;
+
+
     private final InetAddress serverIP;
 
     DatagramPacket sendPacket, receivePacket;
@@ -563,8 +572,9 @@ public class DroneSubsystem {
      * Sends a status update to the scheduler
      */
     public void sendStatusUpdate() {
+        String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
         String status = droneId + " " + 
-                        currentState.getClass().getSimpleName() + " " + 
+                        currentState.getClass().getSimpleName() + errorInfo + " " +
                         currentLocation.getX() + " " + 
                         currentLocation.getY();
         send(status, 6001); // Send to scheduler
@@ -585,6 +595,13 @@ public class DroneSubsystem {
     public void handleFireEvent(FireEvent event) {
         System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
+
+        // Check if the event has an error
+        if(event.hasError()){
+            setError(event.getError());
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Error detected in fire event: " +
+                    event.getError() + ConsoleColors.RESET);
+        }
         currentState.handleFireEvent(this, event);
         System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
@@ -596,9 +613,22 @@ public class DroneSubsystem {
     public void dropAgent() {
         System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
+        //Start drop agent timer
+        startDropAgentTimer();
+
         currentState.dropAgent(this);
+
+        //Check for drop agent timeout
+        if (isDropAgentTimedOut()){
+            setError(ErrorType.NOZZLE_JAM);
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Nozzle jammed during agent drop - timeout exceeded" +
+                    ConsoleColors.RESET);
+        }
         System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
+
+        //Reset timer
+        resetTimers();
     }
 
     /**
@@ -639,6 +669,85 @@ public class DroneSubsystem {
             scheduleFireEvent(fireEvent);
         }
 
+    }
+
+    /**
+     * Sets an error on the drone
+     * @param errorType The type of error
+     */
+    public void setError(ErrorType errorType) {
+        this.currentError = errorType;
+        System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] ERROR DETECTED: " +
+                errorType + ConsoleColors.RESET);
+        //If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
+        if(errorType == ErrorType.NOZZLE_JAM){
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] HARD FAULT: Shutting down drone" +
+                    ConsoleColors.RESET);
+            droneFaulted();
+        }
+    }
+
+    /**
+     * Checks if the drone has an error
+     * @return true if the drone has an error
+     */
+    public boolean hasError() {
+        return currentError != ErrorType.NONE;
+    }
+
+    /**
+     * Gets the current error
+     * @return the current error
+     */
+    public ErrorType getCurrentError() {
+        return currentError;
+    }
+
+    /**
+     * Clears the current error
+     */
+    public void clearError() {
+        this.currentError = ErrorType.NONE;
+    }
+
+    /**
+     * Starts the movement timer
+     */
+    public void startMovementTimer() {
+        this.movementStartTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Checks if movement has timed out
+     * @return true if movement has timed out
+     */
+    public boolean isMovementTimedOut() {
+        if (movementStartTime == 0) return false;
+        return (System.currentTimeMillis() - movementStartTime) > MAX_MOVEMENT_TIME;
+    }
+
+    /**
+     * Starts the drop agent timer
+     */
+    public void startDropAgentTimer() {
+        this.dropAgentStartTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Checks if drop agent has timed out
+     * @return true if drop agent has timed out
+     */
+    public boolean isDropAgentTimedOut() {
+        if (dropAgentStartTime == 0) return false;
+        return (System.currentTimeMillis() - dropAgentStartTime) > MAX_DROP_AGENT_TIME;
+    }
+
+    /**
+     * Resets all timers
+     */
+    public void resetTimers() {
+        this.movementStartTime = 0;
+        this.dropAgentStartTime = 0;
     }
 
     /**
@@ -802,6 +911,20 @@ public class DroneSubsystem {
             Location zoneLocation = getZoneLocation(zoneId);
             String severity = event.getSeverity();
             String droneId = drone.getDroneId();
+
+            //Check for injected errors from the event
+            if(event.hasError()){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Error injected from input: " +
+                        event.getError() + ConsoleColors.RESET);
+                drone.setError(event.getError());
+
+                //if it's a hard fault like nozzle/bay door fault, we abort mission!
+                if (event.getError() == ErrorType.NOZZLE_JAM) {
+                    System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Hard fault detected, aborting mission" +
+                            ConsoleColors.RESET);
+                    return;
+                }
+            }
             
             // ──────────────── MISSION START ─────────────────
             System.out.println(ConsoleColors.YELLOW + "\nDRONE " + droneId + ": Mission start to Zone " + zoneId +
@@ -814,6 +937,14 @@ public class DroneSubsystem {
             
             // Fly to zone
             simulateMovement(drone, zoneLocation);
+
+            //Check if movement failed
+            if(drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Movement fault detected, cannot reach zone" +
+                        ConsoleColors.RESET);
+                drone.droneFaulted();
+                return;
+            }
             
             // Calculate firefighting duration based on severity
             int firefightingDuration = calculateFirefightingDuration(severity);
@@ -821,6 +952,16 @@ public class DroneSubsystem {
             // Drop agent at target location
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
+
+            // Check if nozzle/bay door fault occurred
+            if (drone.hasError() && (drone.getCurrentError() == ErrorType.NOZZLE_JAM)){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Nozzle/bay door fault detected, cannot drop agent" +
+                        ConsoleColors.RESET);
+                drone.droneFaulted();
+                return;
+            }
+
+
             System.out.println(ConsoleColors.RED + " DRONE " + droneId + ": Fighting fire in Zone " + zoneId +
                            " (" + (firefightingDuration/1000) + "s)" + ConsoleColors.RESET);
             Thread.sleep(firefightingDuration);
@@ -844,10 +985,26 @@ public class DroneSubsystem {
             
             // Return flight
             simulateMovement(drone, drone.getBaseLocation());
+
+            // Check if movement failed during return
+            if (drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK) {
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Movement fault detected during return, cannot reach base" +
+                        ConsoleColors.RESET);
+                drone.droneFaulted();
+                return;
+            }
             
             // Complete the task and perform maintenance
             drone.setCurrentLocation(drone.getBaseLocation());
             Thread.sleep(1000); // Shorter maintenance time
+
+            // Clear any non-hard faults when returning to base
+            if (drone.hasError() && drone.getCurrentError() != ErrorType.NOZZLE_JAM) {
+                System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Non-hard fault cleared during maintenance" +
+                        ConsoleColors.RESET);
+                drone.clearError();
+            }
+
             drone.taskCompleted();
             
             // ──────────────── MISSION COMPLETE ─────────────────
@@ -904,9 +1061,14 @@ public class DroneSubsystem {
         int distance = currentLocation.distanceTo(targetLocation);
         boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");
         String droneId = drone.getDroneId();
-        
+
+        //Start movement timer
+        drone.startMovementTimer();
         // If locations are the same, no movement needed
-        if (distance == 0) return;
+        if (distance == 0){
+            drone.resetTimers();
+            return;
+        }
         
         // Calculate travel time based on distance and speed
         double baseSpeed = isFaulted ? 5.0 : 10.0; // units per second
@@ -952,7 +1114,13 @@ public class DroneSubsystem {
         }
         
         // Ensure final position is exactly the target
-        drone.setCurrentLocation(targetLocation);
-        drone.sendStatusUpdate();
+        if(!drone.hasError() || drone.getCurrentError() != ErrorType.DRONE_STUCK){
+            drone.setCurrentLocation(targetLocation);
+            drone.sendStatusUpdate();
+        }
+
+        //Reset timers
+        drone.resetTimers();
+
     }
 }

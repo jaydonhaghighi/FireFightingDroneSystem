@@ -89,7 +89,7 @@ public class Scheduler {
         try {
             receiveSocket.receive(receivePacket);
         } catch (IOException e) {
-            System.out.println("receieve error: " + e);
+            System.out.println("receive error: " + e);
         }
 
         int len = receivePacket.getLength();
@@ -124,11 +124,26 @@ public class Scheduler {
                 String droneId = parts[0];
                 // Check if it starts with "drone" and if the next part is not a time format (to differentiate from fire events)
                 if (droneId.startsWith("drone")) {
+                    //find the x and y coordinates, which might be offset if ERROR: is present
+                    int xIndex = 2;
+                    int yIndex = 3;
+
+                    //if there's an ERROR: part, adjust the indices
+                    for (int i = 0; i < parts.length; i++) {
+                        if (parts[i].startsWith("ERROR:")) {
+                            // Shift the indices for x and y
+                            xIndex = i + 1;
+                            yIndex = i + 2;
+                            break;
+                        }
+                    }
                     // Try to parse the 3rd and 4th parts as integers (x and y coordinates)
-                    Integer.parseInt(parts[2]);
-                    Integer.parseInt(parts[3]);
-                    System.out.println(SchedulerColors.GREEN + "[SCHEDULER] Identified drone status update from: " + droneId + SchedulerColors.RESET);
-                    return true;
+                    if(parts.length > yIndex){
+                        // Try to parse the coordinates as integers
+                        Integer.parseInt(parts[xIndex]);
+                        Integer.parseInt(parts[yIndex]);
+                        return true;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -147,8 +162,41 @@ public class Scheduler {
             String[] parts = message.split(" ");
             String droneId = parts[0];
             String state = parts[1];
-            int x = Integer.parseInt(parts[2]);
-            int y = Integer.parseInt(parts[3]);
+
+            //Initialize error type as NONE
+            FireEvent.ErrorType errorType = FireEvent.ErrorType.NONE;
+
+            // Find the x and y coordinates, which might be offset if ERROR: is present
+            int xIndex = 2;
+            int yIndex = 3;
+
+            // Check for error information
+            for (int i = 0; i < parts.length; i++) {
+                if (parts[i].startsWith("ERROR:")) {
+                    // Extract error type
+                    String errorTypeStr = parts[i].substring("ERROR:".length());
+                    try {
+                        errorType = FireEvent.ErrorType.valueOf(errorTypeStr);
+                    } catch (IllegalArgumentException e) {
+                        System.out.println(SchedulerColors.RED + "[SCHEDULER] Unknown error type: " + errorTypeStr + SchedulerColors.RESET);
+                    }
+
+                    // Shift the indices for x and y
+                    xIndex = i + 1;
+                    yIndex = i + 2;
+                    break;
+                }
+            }
+
+            // Make sure we have enough parts for the coordinates
+            if (parts.length <= yIndex) {
+                System.out.println(SchedulerColors.RED + "[SCHEDULER] Invalid drone status format: " + message + SchedulerColors.RESET);
+                return;
+            }
+
+
+            int x = Integer.parseInt(parts[xIndex]);
+            int y = Integer.parseInt(parts[yIndex]);
             Location location = new Location(x, y);
             
             // Register drone if not already registered
@@ -157,25 +205,49 @@ public class Scheduler {
                 status = droneManager.registerDrone(droneId);
                 System.out.println(SchedulerColors.GREEN + "[SCHEDULER] Registered new drone: " + droneId + SchedulerColors.RESET);
             } else {
-                // Check if state or location actually changed before logging
+                // Check if state, location or error actually changed before logging
                 boolean stateChanged = !status.getState().equalsIgnoreCase(state);
                 boolean locationChanged = !status.getCurrentLocation().equals(location);
+                boolean errorChanged = (status.getErrorType() != errorType);
                 
                 // Only update status in DroneManager (we always want to track latest status)
                 droneManager.updateDroneStatus(droneId, state, location, null);
+
+                // Update error type
+                if (errorType != FireEvent.ErrorType.NONE) {
+                    status.setErrorType(errorType);
+                }
                 
                 // Only print messages if something meaningful changed
                 if (stateChanged || locationChanged) {
+                    String errorInfo = (errorType != FireEvent.ErrorType.NONE) ?
+                            " with error: " + errorType : "";
                     System.out.println(SchedulerColors.CYAN + "[SCHEDULER] Updated drone status: " + droneId + 
-                                      " at " + location + " in state " + state + SchedulerColors.RESET);
+                                      " at " + location + " in state " + state + errorInfo + SchedulerColors.RESET);
                 }
                 return; // Skip the duplicate log below if we're in the else branch
             }
             
             // This will only run for newly registered drones
             droneManager.updateDroneStatus(droneId, state, location, null);
+
+            // Update error type
+            if (errorType != FireEvent.ErrorType.NONE) {
+                status.setErrorType(errorType);
+
+                // Check if this is a hard fault
+                if (errorType == FireEvent.ErrorType.NOZZLE_JAM) {
+                    System.out.println(SchedulerColors.RED + "[SCHEDULER] HARD FAULT DETECTED: " +
+                            droneId + " has a " + errorType +
+                            " and is being permanently removed from service" +
+                            SchedulerColors.RESET);
+                }
+            }
+
+            String errorInfo = (errorType != FireEvent.ErrorType.NONE) ?
+                    " with error: " + errorType : "";
             System.out.println(SchedulerColors.CYAN + "[SCHEDULER] Updated drone status: " + droneId + 
-                              " at " + location + " in state " + state + SchedulerColors.RESET);
+                              " at " + location + " in state " + state + errorInfo + SchedulerColors.RESET);
         } catch (Exception e) {
             System.out.println(SchedulerColors.RED + "[SCHEDULER] Error processing drone status: " + e + SchedulerColors.RESET);
         }
@@ -323,7 +395,15 @@ public class Scheduler {
         
         System.out.println(SchedulerColors.CYAN + "[DRONE FLEET]" + SchedulerColors.RESET);
         for (DroneStatus drone : allDrones) {
-            String statusSymbol = drone.isAvailable() ? "READY" : "BUSY";
+            String statusSymbol;
+            if(drone.isAvailable()){
+                statusSymbol = "READY";
+            }else if(drone.hasHardFault()){
+                statusSymbol = "HARD FAULT";
+            }else{
+                statusSymbol = "BUSY";
+            }
+
             String statusColor = drone.isAvailable() ? SchedulerColors.GREEN : SchedulerColors.YELLOW;
             String missionInfo = drone.getCurrentTask() != null ? 
                                 "to Zone " + drone.getCurrentTask().getZoneID() + " (" + drone.getCurrentTask().getSeverity() + ")" :

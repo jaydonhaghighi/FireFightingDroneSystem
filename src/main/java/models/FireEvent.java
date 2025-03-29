@@ -14,7 +14,7 @@ public class FireEvent {
     /**The ID of the drone assigned to handle this event*/
     String assignedDroneId;
 
-    ErrorType error;
+    public ErrorType error;
 
     public enum ErrorType {
         DRONE_STUCK, NOZZLE_JAM, DOOR_STUCK, ARRIVAL_SENSOR_FAILED, NONE
@@ -113,12 +113,31 @@ public class FireEvent {
         FireEvent event = new FireEvent(time, zoneID, eventType, severity, false);
         
         // Check if a drone ID is included
-        if (parts.length > 4) {
-            event.assignDrone(parts[4]);
+        int currentPosition = 4;
+        if (parts.length > currentPosition && !isErrorType(parts[currentPosition])) {
+            event.assignDrone(parts[currentPosition]);
+            currentPosition++;
         }
+
+        // Check if an error type is included
+        if (parts.length > currentPosition) {
+            // Parse error type
+            if (parts[currentPosition].contains("NOZZLE_JAM")) {
+                event.error = ErrorType.NOZZLE_JAM;
+            } else if (parts[currentPosition].contains("DOOR_STUCK")) {
+                event.error = ErrorType.DOOR_STUCK;
+            } else if (parts[currentPosition].contains("DRONE_STUCK")) {
+                event.error = ErrorType.DRONE_STUCK;
+            } else if (parts[currentPosition].contains("ARRIVAL_SENSOR")) {
+                event.error = ErrorType.ARRIVAL_SENSOR_FAILED;
+            }
+        }
+
+
         
         return event;
     }
+
 
     /**
      * Returns a string representation of the fire event
@@ -131,5 +150,13 @@ public class FireEvent {
         } else {
             return time + " " + zoneID + " " + eventType + " " + severity + " " + error;
         }
+    }
+
+    // Helper method to check if a string is an error type
+    private static boolean isErrorType(String str) {
+        return str.contains("NOZZLE_JAM") ||
+                str.contains("DOOR_STUCK") ||
+                str.contains("DRONE_STUCK") ||
+                str.contains("ARRIVAL_SENSOR");
     }
 }

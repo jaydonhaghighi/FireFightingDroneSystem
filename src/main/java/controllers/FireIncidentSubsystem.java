@@ -91,6 +91,8 @@ public class FireIncidentSubsystem {
      */
     public FireEvent readFile() {
         boolean error = false;
+        FireEvent.ErrorType errorType = FireEvent.ErrorType.NONE;
+
         // reads file (fire_events.txt)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
@@ -100,9 +102,29 @@ public class FireIncidentSubsystem {
                 // split line by space
                 String[] parts = line.split(" ");
 
+                //Reset error flags for each new line
+                error = false;
+                errorType = FireEvent.ErrorType.NONE;
+
+
                 if (parts.length > 4) {
+                    String errorPart = parts[4];
                     if (parts[4].equals("ERROR")) {
                         error = true;
+                    }
+                    // Check for specific error types
+                    if (errorPart.contains("NOZZLE_JAM")) {
+                        error = true;
+                        errorType = FireEvent.ErrorType.NOZZLE_JAM;
+                    } else if (errorPart.contains("DOOR_STUCK")) {
+                        error = true;
+                        errorType = FireEvent.ErrorType.DOOR_STUCK;
+                    } else if (errorPart.contains("DRONE_STUCK")) {
+                        error = true;
+                        errorType = FireEvent.ErrorType.DRONE_STUCK;
+                    } else if (errorPart.contains("ARRIVAL_SENSOR_FAILED")) {
+                        error = true;
+                        errorType = FireEvent.ErrorType.ARRIVAL_SENSOR_FAILED;
                     }
                 }
 
@@ -112,6 +134,11 @@ public class FireIncidentSubsystem {
                 String severity = parts[3];
 
                 FireEvent event = new FireEvent(time, zoneID, eventType, severity, error);
+
+                // Explicitly set the error type if a specific one was detected
+                if (errorType != FireEvent.ErrorType.NONE) {
+                    event.error = errorType;
+                }
 
                 send(event);
                 receive();
@@ -155,7 +182,7 @@ public class FireIncidentSubsystem {
     public static void main(String[] args){
         try{
             InetAddress ip = InetAddress.getLocalHost();
-            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
+            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events2.txt", ip);
             
 
             System.out.println(FireSystemColors.GREEN + "● SYSTEM: Ready to send fire alerts" + FireSystemColors.RESET);
