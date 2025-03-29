@@ -829,14 +829,30 @@ public class DroneSubsystem {
             while (true) {
                 FireEvent event = drone.receive();
                 
-                // Only process events assigned to this drone or with no assignment
-                String assignedDroneId = event.getAssignedDroneId();
-                if (assignedDroneId == null || assignedDroneId.equals(drone.getDroneId())) {
+                // Process events assigned to this drone (either as primary or as part of multi-drone response)
+                String primaryDroneId = event.getAssignedDroneId();
+                String thisDroneId = drone.getDroneId();
+                
+                // Check if this drone should respond - either it's assigned directly or it's one of multiple drones assigned
+                if (primaryDroneId == null || 
+                    primaryDroneId.equals(thisDroneId) || 
+                    event.isDroneAssigned(thisDroneId)) {
+                    
+                    // For multi-drone responses, indicate which response number this is
+                    if (event.getAssignedDroneCount() > 1) {
+                        System.out.println(ConsoleColors.CYAN + "[DRONE " + thisDroneId + 
+                                         "] Part of multi-drone response (" + 
+                                         event.getAssignedDroneCount() + " drones total)" + 
+                                         ConsoleColors.RESET);
+                    }
+                    
                     processEvent(drone, event);
                     // Send status update after event is processed
                     drone.sendStatusUpdate();
                 } else {
-                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + drone.getDroneId() + "] Ignoring event assigned to " + assignedDroneId + ConsoleColors.RESET);
+                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + thisDroneId + 
+                                     "] Ignoring event assigned to " + primaryDroneId + 
+                                     ConsoleColors.RESET);
                 }
             }
         } catch (Exception e) {
@@ -880,9 +896,21 @@ public class DroneSubsystem {
                            drone.getSpecifications().getFlowRate() + " L/s)" + ConsoleColors.RESET);
             Thread.sleep(firefightingDuration);
             
-            // Fire extinguished
-            System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
-                           ConsoleColors.RESET);
+            // Determine if fire is fully extinguished or if drone has contributed its capacity
+            int dronesNeeded = getRequiredDronesForSeverity(severity);
+            boolean fullCapacityUsed = true; // Assume drone used full capacity
+            
+            if (event.getAssignedDroneCount() >= dronesNeeded) {
+                // If enough drones were dispatched, fire would be fully extinguished
+                System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
+                               " (Team response: " + event.getAssignedDroneCount() + "/" + dronesNeeded + " drones)" +
+                               ConsoleColors.RESET);
+            } else {
+                // Otherwise, fire is only partially contained
+                System.out.println(ConsoleColors.YELLOW + "DRONE " + droneId + ": Fire partially contained in Zone " + zoneId +
+                               " (Only " + event.getAssignedDroneCount() + "/" + dronesNeeded + " drones available)" +
+                               ConsoleColors.RESET);
+            }
             
             // Return to base
             drone.setTargetLocation(drone.getBaseLocation());
@@ -926,6 +954,24 @@ public class DroneSubsystem {
     private static int calculateFirefightingDuration(String severity, DroneSubsystem drone) {
         // Use drone's specifications to calculate duration based on flow rate and nozzle open time
         return drone.getSpecifications().calculateFirefightingDuration(severity);
+    }
+    
+    /**
+     * Determines the number of drones required to extinguish a fire based on severity
+     * 
+     * @param severity the fire severity
+     * @return the number of drones needed
+     */
+    private static int getRequiredDronesForSeverity(String severity) {
+        switch (severity.toLowerCase()) {
+            case "high":
+                return 3; // 30L water needed
+            case "moderate":
+                return 2; // 20L water needed
+            case "low":
+            default:
+                return 1; // 10L water needed
+        }
     }
     
     /**

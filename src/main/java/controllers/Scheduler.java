@@ -249,59 +249,115 @@ public class Scheduler {
     }
 
     /**
-     * Processes the next fire event in the queue and assigns it to the most appropriate drone
+     * Determines the number of drones needed based on fire severity
+     * 
+     * @param severity the fire severity
+     * @return the number of drones to dispatch
+     */
+    private int getDronesNeededForSeverity(String severity) {
+        switch (severity.toLowerCase()) {
+            case "high":
+                return 3; // 30L total capacity needed - 3 drones with 10L each
+            case "moderate":
+                return 2; // 20L total capacity needed - 2 drones with 10L each
+            case "low":
+            default:
+                return 1; // 10L total capacity needed - 1 drone with 10L
+        }
+    }
+    
+    /**
+     * Processes the next fire event in the queue and assigns it to the appropriate number of drones
+     * based on fire severity
      */
     public void getDroneTask() {
         if (!events.isEmpty()) {
-            FireEvent event = events.peek(); // Don't remove yet until we find a drone
+            FireEvent event = events.peek(); // Don't remove yet until we find sufficient drones
             
             try {
                 int zoneId = event.getZoneID();
                 String severity = event.getSeverity();
                 Location zoneLocation = droneManager.getLocationForZone(zoneId);
                 
+                // Determine how many drones we need for this severity
+                int dronesNeeded = getDronesNeededForSeverity(severity);
+                
                 // ──────────────── EMERGENCY HANDLING ─────────────────
                 System.out.println(SchedulerColors.YELLOW + "\n[ALERT] " + severity + " fire in Zone " +
-                                 zoneId + " at " + zoneLocation + SchedulerColors.RESET);
+                                 zoneId + " at " + zoneLocation + " (requires " + dronesNeeded + " drones)" + 
+                                 SchedulerColors.RESET);
                 
                 // Brief assessment delay
                 Thread.sleep(1000);
                 
-                // Select best drone for this event
-                DroneStatus bestDrone = droneManager.selectBestDroneForEvent(event);
+                // Track the drones we've dispatched
+                List<DroneStatus> dispatchedDrones = new ArrayList<>();
                 
-                if (bestDrone != null) {
-                    // Remove event from queue since we found a drone
+                // Attempt to dispatch the required number of drones
+                for (int i = 0; i < dronesNeeded; i++) {
+                    // Select best available drone for this event
+                    DroneStatus drone = droneManager.selectBestDroneForEvent(event);
+                    
+                    if (drone != null) {
+                        // Add to dispatched list
+                        dispatchedDrones.add(drone);
+                        
+                        // Mission parameters
+                        String droneId = drone.getDroneId();
+                        int distance = drone.distanceTo(zoneLocation);
+                        int previousMissions = drone.getZonesServiced();
+                        
+                        // Mission assignment - includes drone count information
+                        System.out.println(SchedulerColors.GREEN + "[ASSIGNED] " + droneId + 
+                                         " to Zone " + zoneId + " (" + 
+                                         "Drone " + (i+1) + "/" + dronesNeeded + ", " +
+                                         distance + " meters away, " + 
+                                         previousMissions + " previous missions)" + 
+                                         SchedulerColors.RESET);
+                        
+                        // Update drone status
+                        droneManager.updateDroneStatus(droneId, drone.getState(), 
+                                                     drone.getCurrentLocation(), event);
+                        
+                        // Send to the selected drone
+                        sendToDrone(event, droneId);
+                        
+                        // Delay between drone dispatches (3 seconds as requested)
+                        if (i < dronesNeeded - 1) {
+                            System.out.println(SchedulerColors.CYAN + "[SPACING] Waiting 3 seconds before dispatching next drone..." + 
+                                             SchedulerColors.RESET);
+                            Thread.sleep(3000);
+                        }
+                    } else {
+                        // Not enough available drones
+                        System.out.println(SchedulerColors.YELLOW + "[PARTIAL RESPONSE] Could only dispatch " + 
+                                         dispatchedDrones.size() + "/" + dronesNeeded + " drones to Zone " + zoneId + 
+                                         SchedulerColors.RESET);
+                        break;
+                    }
+                }
+                
+                // If we dispatched at least one drone, consider the event handled
+                if (!dispatchedDrones.isEmpty()) {
+                    // Remove event from queue since we dispatched drones
                     events.poll();
                     
                     // Update fire status in zone
-                    droneManager.updateZoneFireStatus(zoneId, true, event.getSeverity());
+                    droneManager.updateZoneFireStatus(zoneId, true, severity);
                     
-                    // Mission parameters
-                    String droneId = bestDrone.getDroneId();
-                    int distance = bestDrone.distanceTo(zoneLocation);
-                    int previousMissions = bestDrone.getZonesServiced();
-                    
-                    // Mission assignment - clean and concise output
-                    System.out.println(SchedulerColors.GREEN + "[ASSIGNED] " + droneId + 
-                                     " to Zone " + zoneId + " (" + 
-                                     distance + " units away, " + 
-                                     previousMissions + " previous missions)" + 
-                                     SchedulerColors.RESET);
-                    
-                    // Brief delay for transmission
-                    Thread.sleep(500);
-                    
-                    // Send to the selected drone
-                    sendToDrone(event, droneId);
-                    
-                    // Update drone status
-                    droneManager.updateDroneStatus(droneId, bestDrone.getState(), 
-                                                 bestDrone.getCurrentLocation(), event);
-                    
+                    // If we dispatched less than needed, log a warning
+                    if (dispatchedDrones.size() < dronesNeeded) {
+                        System.out.println(SchedulerColors.YELLOW + "[WARNING] Insufficient drones for " + severity + 
+                                         " fire (sent " + dispatchedDrones.size() + "/" + dronesNeeded + ")" + 
+                                         SchedulerColors.RESET);
+                    } else {
+                        System.out.println(SchedulerColors.GREEN + "[RESPONSE COMPLETE] Dispatched " + 
+                                         dispatchedDrones.size() + " drones to Zone " + zoneId + 
+                                         " (" + severity + " fire)" + SchedulerColors.RESET);
+                    }
                 } else {
-                    // No available drones
-                    System.out.println(SchedulerColors.YELLOW + "[WAITING] No available drones for Zone " +
+                    // No available drones at all
+                    System.out.println(SchedulerColors.RED + "[WAITING] No available drones for Zone " +
                                      zoneId + " (" + events.size() + " events in queue)" + 
                                      SchedulerColors.RESET);
                     Thread.sleep(2000);
