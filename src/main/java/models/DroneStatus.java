@@ -12,6 +12,7 @@ public class DroneStatus {
     private int zonesServiced;
     private long lastUpdateTime;
     private FireEvent.ErrorType errorType = FireEvent.ErrorType.NONE;
+    private DroneSpecifications specifications;
     
     /**
      * Creates a new DroneStatus with the specified ID and initial location
@@ -26,6 +27,24 @@ public class DroneStatus {
         this.state = "IDLE";
         this.zonesServiced = 0;
         this.lastUpdateTime = System.currentTimeMillis();
+        this.specifications = new DroneSpecifications(); // Default specifications
+    }
+    
+    /**
+     * Creates a new DroneStatus with the specified ID, initial location, and specifications
+     * 
+     * @param droneId the unique identifier for the drone
+     * @param initialLocation the initial location of the drone
+     * @param specifications the technical specifications of the drone
+     */
+    public DroneStatus(String droneId, Location initialLocation, DroneSpecifications specifications) {
+        this.droneId = droneId;
+        this.currentLocation = initialLocation;
+        this.targetLocation = initialLocation; // Initially targeting current location
+        this.state = "IDLE";
+        this.zonesServiced = 0;
+        this.lastUpdateTime = System.currentTimeMillis();
+        this.specifications = specifications;
     }
     
     /**
@@ -183,6 +202,45 @@ public class DroneStatus {
      */
     public boolean hasHardFault() {
         return (errorType == FireEvent.ErrorType.NOZZLE_JAM);
+    }
+    
+    /**
+     * Gets the drone's specifications
+     * 
+     * @return the drone specifications
+     */
+    public DroneSpecifications getSpecifications() {
+        return specifications;
+    }
+    
+    /**
+     * Sets the drone's specifications
+     * 
+     * @param specifications the new specifications
+     */
+    public void setSpecifications(DroneSpecifications specifications) {
+        this.specifications = specifications;
+    }
+    
+    /**
+     * Calculates the time to travel to a given location based on drone specifications
+     * 
+     * @param location the target location
+     * @return the time to travel in milliseconds
+     */
+    public int calculateTravelTimeTo(Location location) {
+        int distance = distanceTo(location);
+        return specifications.calculateTravelTime(distance);
+    }
+    
+    /**
+     * Calculates the time required to extinguish a fire based on its severity
+     * 
+     * @param severity the fire severity
+     * @return the time required in milliseconds
+     */
+    public int calculateFirefightingTime(String severity) {
+        return specifications.calculateFirefightingDuration(severity);
     }
     
     @Override
