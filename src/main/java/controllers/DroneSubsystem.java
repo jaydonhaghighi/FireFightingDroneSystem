@@ -460,14 +460,14 @@ class Fault implements DroneState{
 public class DroneSubsystem {
     //current state of drone
     private DroneState currentState;
-    private Queue<FireEvent> fireEventQueue; // Queue for fire events
-    private String droneId; // Unique identifier for this drone
-    private Location currentLocation; // Current physical location
-    private Location targetLocation; // Target location for movement
-    private Location baseLocation; // Home base location
-    private DroneSpecifications specifications; // Technical specifications of the drone
+    private Queue<FireEvent> fireEventQueue;
+    private String droneId;
+    private Location currentLocation; // current physical location
+    private Location targetLocation; // target location for movement
+    private Location baseLocation; // home base location
+    private DroneSpecifications specifications; // specifications of drone
     
-    // Static map to track drops by zone ID
+    // map to track drops by zone ID
     private static final Map<Integer, Integer> zoneDropsMap = new ConcurrentHashMap<>();
 
     private final InetAddress serverIP;
@@ -504,7 +504,7 @@ public class DroneSubsystem {
      * @param specifications The technical specifications of the drone
      */
     public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation, DroneSpecifications specifications) {
-        //set the initial state of drone
+        // set the initial state of drone
         currentState = new Idle();
         this.fireEventQueue = new LinkedList<>();
         this.serverIP = serverIP;
@@ -515,14 +515,13 @@ public class DroneSubsystem {
         this.specifications = specifications;
         
         try {
-            // Create more predictable unique ports for each drone
+            // Create unique ports for each drone
             int droneNumber = 0;
             if (droneId.length() > 5) {
-                // Extract drone number from the ID (e.g. "drone1" -> 1)
                 droneNumber = Integer.parseInt(droneId.substring(5));
             }
             
-            // Use offset of 100 * droneNumber to ensure ports don't conflict
+            // use offset of 100 * droneNumber to ensure ports don't conflict
             int uniqueSendPort = sendPort + (droneNumber * 100);
             int uniqueReceivePort = receivePort + (droneNumber * 100);
             
@@ -534,7 +533,7 @@ public class DroneSubsystem {
                 " using ports: send=" + uniqueSendPort + ", receive=" + uniqueReceivePort + 
                 ConsoleColors.RESET);
                 
-            // Display drone specifications
+            // display drone specifications
             System.out.println(ConsoleColors.CYAN + 
                 "[DRONE " + droneId + "] Specifications: Max Speed=" + specifications.getMaxSpeed() + 
                 " km/h, Flow Rate=" + specifications.getFlowRate() + " L/s, Capacity=" + 
