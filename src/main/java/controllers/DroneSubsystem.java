@@ -7,7 +7,9 @@ import models.Location;
 
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.net.*;
 
 import static models.FireEvent.createFireEventFromString;
@@ -464,6 +466,9 @@ public class DroneSubsystem {
     private Location targetLocation; // Target location for movement
     private Location baseLocation; // Home base location
     private DroneSpecifications specifications; // Technical specifications of the drone
+    
+    // Static map to track drops by zone ID
+    private static final Map<Integer, Integer> zoneDropsMap = new ConcurrentHashMap<>();
 
     private final InetAddress serverIP;
 
@@ -769,6 +774,26 @@ public class DroneSubsystem {
     }
     
     /**
+     * Records a drop for a zone and returns the current count
+     * 
+     * @param zoneId the zone ID where drop occurred
+     * @return the updated drop count for the zone
+     */
+    public static int recordDropForZone(int zoneId) {
+        return zoneDropsMap.compute(zoneId, (key, value) -> (value == null) ? 1 : value + 1);
+    }
+    
+    /**
+     * Gets the current drop count for a zone
+     * 
+     * @param zoneId the zone ID
+     * @return the number of drops for the zone, or 0 if none
+     */
+    public static int getDropsForZone(int zoneId) {
+        return zoneDropsMap.getOrDefault(zoneId, 0);
+    }
+    
+    /**
      * Main program for droneStateMachines
      * */
     public static void main(String[] args) {
@@ -900,15 +925,18 @@ public class DroneSubsystem {
             int dronesNeeded = getRequiredDronesForSeverity(severity);
             boolean fullCapacityUsed = true; // Assume drone used full capacity
             
-            if (event.getAssignedDroneCount() >= dronesNeeded) {
+            // Increment the drops counter for this zone
+            int dropCount = recordDropForZone(zoneId);
+            
+            if (dropCount >= dronesNeeded) {
                 // If enough drones were dispatched, fire would be fully extinguished
                 System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
-                               " (Team response: " + event.getAssignedDroneCount() + "/" + dronesNeeded + " drones)" +
+                               " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
                                ConsoleColors.RESET);
             } else {
-                // Otherwise, fire is only partially contained
+                // Show progress with drops count
                 System.out.println(ConsoleColors.YELLOW + "DRONE " + droneId + ": Fire partially contained in Zone " + zoneId +
-                               " (Only " + event.getAssignedDroneCount() + "/" + dronesNeeded + " drones available)" +
+                               " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
                                ConsoleColors.RESET);
             }
             

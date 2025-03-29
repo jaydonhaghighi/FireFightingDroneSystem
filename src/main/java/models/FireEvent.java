@@ -16,6 +16,9 @@ public class FireEvent {
     
     /**List of all drones assigned to this event (for multi-drone responses)*/
     Set<String> assignedDrones = new HashSet<>();
+    
+    /**Count of completed agent drops for this fire*/
+    private int dropsCompleted = 0;
 
     ErrorType error;
 
@@ -129,6 +132,21 @@ public class FireEvent {
      */
     public int getAssignedDroneCount() {
         return assignedDrones.size();
+    }
+    
+    /**
+     * Gets the number of agent drops completed for this fire
+     * @return the count of completed drops
+     */
+    public int getDropsCompleted() {
+        return dropsCompleted;
+    }
+    
+    /**
+     * Increments the number of agent drops completed for this fire
+     */
+    public void incrementDropsCompleted() {
+        this.dropsCompleted++;
     }
 
     public static FireEvent createFireEventFromString(String input) {
