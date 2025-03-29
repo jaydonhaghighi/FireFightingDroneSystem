@@ -2,6 +2,7 @@ package models;
 
 /**
  * Represents a physical zone in the firefighting system
+ * Zones are rectangular areas defined by their top-left and bottom-right coordinates in meters
  */
 public class Zone {
     private int id;
@@ -16,26 +17,26 @@ public class Zone {
      * (this constructor is maintained for backward compatibility)
      * 
      * @param id the zone ID
-     * @param location the physical location of the zone (will be used as center)
+     * @param location the physical location of the zone in meters (will be used as center)
      */
     public Zone(int id, Location location) {
         this.id = id;
         this.center = location;
-        // Default boundaries around the center point
-        this.topLeft = new Location(location.getX() - 5, location.getY() - 5);
-        this.bottomRight = new Location(location.getX() + 5, location.getY() + 5);
+        // Default boundaries around the center point (350m x 300m rectangular zone)
+        this.topLeft = new Location(location.getX() - 350, location.getY() - 300);
+        this.bottomRight = new Location(location.getX() + 350, location.getY() + 300);
         this.hasFire = false;
         this.severity = "NONE";
     }
     
     /**
-     * Creates a new zone with the specified ID and boundaries
+     * Creates a new zone with the specified ID and boundaries in meters
      * 
      * @param id the zone ID
-     * @param x1 top-left X coordinate
-     * @param y1 top-left Y coordinate
-     * @param x2 bottom-right X coordinate
-     * @param y2 bottom-right Y coordinate
+     * @param x1 top-left X coordinate in meters
+     * @param y1 top-left Y coordinate in meters
+     * @param x2 bottom-right X coordinate in meters
+     * @param y2 bottom-right Y coordinate in meters
      */
     public Zone(int id, int x1, int y1, int x2, int y2) {
         this.id = id;
@@ -88,18 +89,18 @@ public class Zone {
     }
     
     /**
-     * Gets the width of the zone
+     * Gets the width of the zone in meters
      * 
-     * @return zone width
+     * @return zone width in meters
      */
     public int getWidth() {
         return bottomRight.getX() - topLeft.getX();
     }
     
     /**
-     * Gets the height of the zone
+     * Gets the height of the zone in meters
      * 
-     * @return zone height
+     * @return zone height in meters
      */
     public int getHeight() {
         return bottomRight.getY() - topLeft.getY();
