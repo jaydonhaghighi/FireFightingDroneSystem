@@ -20,7 +20,7 @@ public class DroneStatusTest {
         baseLocation = new Location(0, 0);
         targetLocation = new Location(10, 20);
         drone = new DroneStatus("drone1", baseLocation);
-        fireEvent = new FireEvent("10:30", 5, "FIRE", "high");
+        fireEvent = new FireEvent("10:30", 5, "FIRE", "high", false);
     }
 
     @Test
