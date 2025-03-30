@@ -56,7 +56,7 @@ public class CommunicationTest {
         String severity = "high";
 
         // 1. Create a fire event
-        FireEvent event = new FireEvent(eventTime, zoneId, eventType, severity);
+        FireEvent event = new FireEvent(eventTime, zoneId, eventType, severity, false);
 
         // 2. Fire system sends event to scheduler
         fireSystem.simulateSendingEvent(event);
@@ -134,7 +134,7 @@ public class CommunicationTest {
                 output.contains("Warning") || output.contains("Error") || output.contains("could not be parsed"));
 
         // 3. Verify scheduler is still operational by sending a valid event
-        FireEvent validEvent = new FireEvent("14:30", 3, "FIRE", "high");
+        FireEvent validEvent = new FireEvent("14:30", 3, "FIRE", "high", false);
         scheduler.simulateReceivingEvent(validEvent);
 
         // 4. Verify the valid event was processed correctly
@@ -149,9 +149,9 @@ public class CommunicationTest {
     @Test
     public void testMultipleConcurrentEvents() throws Exception {
         // Create multiple fire events
-        FireEvent event1 = new FireEvent("14:30", 3, "FIRE", "high");
-        FireEvent event2 = new FireEvent("14:31", 4, "FIRE", "moderate");
-        FireEvent event3 = new FireEvent("14:32", 5, "FIRE", "low");
+        FireEvent event1 = new FireEvent("14:30", 3, "FIRE", "high", false);
+        FireEvent event2 = new FireEvent("14:31", 4, "FIRE", "moderate", false);
+        FireEvent event3 = new FireEvent("14:32", 5, "FIRE", "low", false);
 
         // Create a queue of events for the scheduler
         FireEvent[] events = {event1, event2, event3};

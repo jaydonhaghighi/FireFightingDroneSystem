@@ -15,9 +15,9 @@ public class FireEventTest {
     @Before
     public void setUp() {
         // Initialize test events
-        basicEvent = new FireEvent("10:30", 5, "FIRE", "high");
+        basicEvent = new FireEvent("10:30", 5, "FIRE", "high", false);
 
-        assignedEvent = new FireEvent("11:45", 8, "SMOKE", "low");
+        assignedEvent = new FireEvent("11:45", 8, "SMOKE", "low", false);
         assignedEvent.assignDrone("drone1");
     }
 

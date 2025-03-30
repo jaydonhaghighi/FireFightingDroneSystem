@@ -121,8 +121,8 @@ public class SchedulerTest {
 
         // Create a test queue and inject it
         Queue<FireEvent> testQueue = new LinkedList<>();
-        FireEvent event1 = new FireEvent("10:30", 1, "FIRE", "high");
-        FireEvent event2 = new FireEvent("11:45", 2, "SMOKE", "low");
+        FireEvent event1 = new FireEvent("10:30", 1, "FIRE", "high", false);
+        FireEvent event2 = new FireEvent("11:45", 2, "SMOKE", "low", false);
         testQueue.add(event1);
         testQueue.add(event2);
         eventsField.set(scheduler, testQueue);
@@ -209,7 +209,7 @@ public class SchedulerTest {
 
         // Create a method to simulate receiving a fire event
         // This is a simplified simulation since we can't actually use the receive method
-        FireEvent testEvent = new FireEvent("10:30", 1, "FIRE", "high");
+        FireEvent testEvent = new FireEvent("10:30", 1, "FIRE", "high", false);
 
         // Manually add event to queue
         testQueue.add(testEvent);
@@ -225,7 +225,7 @@ public class SchedulerTest {
     @Test
     public void testFireEventAssignment() {
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "high");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "high", false);
         assertNull("Initially, no drone should be assigned", event.getAssignedDroneId());
 
         // Assign a drone

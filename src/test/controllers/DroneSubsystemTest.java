@@ -74,7 +74,7 @@ public class DroneSubsystemTest {
         @Override
         public FireEvent receive() {
             // Return a dummy event instead of waiting for network
-            return new FireEvent("12:30", 1, "TEST", "medium");
+            return new FireEvent("12:30", 1, "TEST", "medium", false);
         }
 
         @Override
@@ -97,7 +97,7 @@ public class DroneSubsystemTest {
     @Test
     public void testHandleFireEvent() {
         // Create a fire event
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
 
         // Handle the fire event - should transition to EN ROUTE
         droneSubsystem.handleFireEvent(event);
@@ -128,7 +128,7 @@ public class DroneSubsystemTest {
         outputCapture.reset();
 
         // Change to EN ROUTE and try to drop agent - should transition to dropping agent
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
         droneSubsystem.handleFireEvent(event);
         assertEquals("EnRoute", droneSubsystem.getCurrentStateName());
 
@@ -153,7 +153,7 @@ public class DroneSubsystemTest {
         outputCapture.reset();
 
         // Change to dropping agent and try to return - should transition to ArrivedToBase
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
         droneSubsystem.handleFireEvent(event); // IDLE -> EN ROUTE
         droneSubsystem.dropAgent(); // EN ROUTE -> DROPPING AGENT
 
@@ -175,7 +175,7 @@ public class DroneSubsystemTest {
         outputCapture.reset();
 
         // Change to ArrivedToBase and trigger fault - should transition to Fault
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
         droneSubsystem.handleFireEvent(event); // IDLE -> EN ROUTE
         droneSubsystem.dropAgent(); // EN ROUTE -> DROPPING AGENT
         droneSubsystem.returningBack(); // DROPPING AGENT -> ARRIVED TO BASE
@@ -198,7 +198,7 @@ public class DroneSubsystemTest {
         outputCapture.reset();
 
         // Change to ArrivedToBase and complete task - should transition to IDLE
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
         droneSubsystem.handleFireEvent(event); // IDLE -> EN ROUTE
         droneSubsystem.dropAgent(); // EN ROUTE -> DROPPING AGENT
         droneSubsystem.returningBack(); // DROPPING AGENT -> ARRIVED TO BASE
@@ -212,7 +212,7 @@ public class DroneSubsystemTest {
     @Test
     public void testRecoveryFromFault() {
         // Create a sequence: IDLE -> EN ROUTE -> DROPPING -> ARRIVED -> FAULT
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
         droneSubsystem.handleFireEvent(event);
         droneSubsystem.dropAgent();
         droneSubsystem.returningBack();
@@ -232,7 +232,7 @@ public class DroneSubsystemTest {
 
     @Test
     public void testScheduleFireEventWhenIdle() {
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
 
         // Schedule event when IDLE - should handle immediately
         droneSubsystem.scheduleFireEvent(event);
@@ -243,8 +243,8 @@ public class DroneSubsystemTest {
 
     @Test
     public void testScheduleFireEventWhenBusy() {
-        FireEvent event1 = new FireEvent("12:30", 3, "FIRE", "high");
-        FireEvent event2 = new FireEvent("12:45", 4, "FIRE", "moderate");
+        FireEvent event1 = new FireEvent("12:30", 3, "FIRE", "high", false);
+        FireEvent event2 = new FireEvent("12:45", 4, "FIRE", "moderate", false);
 
         // Schedule first event to make drone busy
         droneSubsystem.scheduleFireEvent(event1);
@@ -265,8 +265,8 @@ public class DroneSubsystemTest {
 
     @Test
     public void testQueueProcessingAfterTaskCompletion() {
-        FireEvent event1 = new FireEvent("12:30", 3, "FIRE", "high");
-        FireEvent event2 = new FireEvent("12:45", 4, "FIRE", "moderate");
+        FireEvent event1 = new FireEvent("12:30", 3, "FIRE", "high", false);
+        FireEvent event2 = new FireEvent("12:45", 4, "FIRE", "moderate", false);
 
         // Schedule first event, then queue second event
         droneSubsystem.scheduleFireEvent(event1);
@@ -309,7 +309,7 @@ public class DroneSubsystemTest {
         // This test verifies a complete mission cycle through all states
 
         // Create a fire event
-        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high");
+        FireEvent event = new FireEvent("12:30", 3, "FIRE", "high", false);
 
         // 1. Start in IDLE
         assertEquals("Idle", droneSubsystem.getCurrentStateName());
