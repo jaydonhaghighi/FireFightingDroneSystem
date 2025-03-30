@@ -9,14 +9,14 @@ public class FireEvent {
     int zoneID;
     /**The type of fire event*/
     String eventType;
-    /**The severity level of the fire event(e.g. High, Medium, Low*/
+    /**The severity level of the fire event(e.g. High, Medium, Low)*/
     String severity;
     /**The ID of the primary drone assigned to handle this event*/
     String assignedDroneId;
-    
+
     /**List of all drones assigned to this event (for multi-drone responses)*/
     Set<String> assignedDrones = new HashSet<>();
-    
+
     /**Count of completed agent drops for this fire*/
     private int dropsCompleted = 0;
 
@@ -27,11 +27,12 @@ public class FireEvent {
     }
 
     /**
-     * Constructors a FireEvent with the specified parameters below
+     * Constructor to create a FireEvent with the specified parameters
      * @param time The time at which the fire event occurred
      * @param zoneID The ID of the zone the fire occurred
      * @param eventType The type of fire event
-     * @param severity The severity level of the fire event(e.g. High, Medium, Low
+     * @param severity The severity level of the fire event (e.g., High, Medium, Low)
+     * @param error Whether to randomly assign an error (true = random error, false = no error)
      */
     public FireEvent(String time, int zoneID, String eventType, String severity, boolean error) {
         this.time = time;
@@ -41,10 +42,10 @@ public class FireEvent {
         this.assignedDroneId = null;
         this.assignedDrones = new HashSet<>();
 
-
+        // Randomly assign an error if error flag is true
         if (error) {
             ErrorType[] errorTypes = ErrorType.values();
-            int randomI = new Random().nextInt(errorTypes.length - 1);
+            int randomI = new Random().nextInt(errorTypes.length - 1); // Randomly pick an error
             this.error = errorTypes[randomI];
         } else {
             this.error = ErrorType.NONE;
@@ -83,15 +84,14 @@ public class FireEvent {
         this.severity = severity;
     }
 
-    public ErrorType getError() { return error; }
+    public ErrorType getError() {
+        return error;
+    }
 
     public boolean hasError() {
-        if (error != ErrorType.NONE) {
-            return true;
-        }
-        return false;
+        return error != ErrorType.NONE;
     }
-    
+
     /**
      * Gets the ID of the drone assigned to this event
      * @return drone ID or null if no drone assigned
@@ -99,7 +99,7 @@ public class FireEvent {
     public String getAssignedDroneId() {
         return assignedDroneId;
     }
-    
+
     /**
      * Assigns a drone to this event
      * @param droneId the ID of the drone to assign
@@ -108,7 +108,7 @@ public class FireEvent {
         this.assignedDroneId = droneId; // Keep for backward compatibility
         this.assignedDrones.add(droneId); // Add to the set of all assigned drones
     }
-    
+
     /**
      * Gets all drones assigned to this event
      * @return set of assigned drone IDs
@@ -116,7 +116,7 @@ public class FireEvent {
     public Set<String> getAllAssignedDrones() {
         return assignedDrones;
     }
-    
+
     /**
      * Checks if a specific drone is assigned to this event
      * @param droneId the drone ID to check
@@ -125,7 +125,7 @@ public class FireEvent {
     public boolean isDroneAssigned(String droneId) {
         return assignedDrones.contains(droneId);
     }
-    
+
     /**
      * Gets the number of drones assigned to this event
      * @return the count of assigned drones
@@ -133,7 +133,7 @@ public class FireEvent {
     public int getAssignedDroneCount() {
         return assignedDrones.size();
     }
-    
+
     /**
      * Gets the number of agent drops completed for this fire
      * @return the count of completed drops
@@ -141,7 +141,7 @@ public class FireEvent {
     public int getDropsCompleted() {
         return dropsCompleted;
     }
-    
+
     /**
      * Increments the number of agent drops completed for this fire
      */
@@ -149,43 +149,81 @@ public class FireEvent {
         this.dropsCompleted++;
     }
 
-    public static FireEvent createFireEventFromString(String input) {
-        // Split the string into its components based on whitespace
-        String[] parts = input.split(" ");
-        String time = parts[0];
-        int zoneID = Integer.parseInt(parts[1]);
-        String eventType = parts[2];
-        String severity = parts[3];
-
-        // Create the new FireEvent object
-        FireEvent event = new FireEvent(time, zoneID, eventType, severity, false);
-        
-        // Check if a drone ID is included
-        int currentPosition = 4;
-        if (parts.length > currentPosition && !isErrorType(parts[currentPosition])) {
-            event.assignDrone(parts[currentPosition]);
-            currentPosition++;
-        }
-
-        // Check if an error type is included
-        if (parts.length > currentPosition) {
-            // Parse error type
-            if (parts[currentPosition].contains("NOZZLE_JAM")) {
-                event.error = ErrorType.NOZZLE_JAM;
-            } else if (parts[currentPosition].contains("DOOR_STUCK")) {
-                event.error = ErrorType.DOOR_STUCK;
-            } else if (parts[currentPosition].contains("DRONE_STUCK")) {
-                event.error = ErrorType.DRONE_STUCK;
-            } else if (parts[currentPosition].contains("ARRIVAL_SENSOR")) {
-                event.error = ErrorType.ARRIVAL_SENSOR_FAILED;
-            }
-        }
-
-
-        
-        return event;
+    /**
+     * Checks if the fire event is corrupted (e.g., missing or invalid fields)
+     * @return true if the event data is corrupted, false otherwise
+     */
+    public boolean isCorrupted() {
+        return time == null || time.isEmpty() ||
+                zoneID < 0 ||
+                eventType == null || eventType.isEmpty() ||
+                severity == null || severity.isEmpty();
     }
 
+    /**
+     * Creates a FireEvent object from a string representation
+     * @param input The string input containing the fire event data
+     * @return the FireEvent object created from the string
+     */
+    public static FireEvent createFireEventFromString(String input) {
+        try {
+            // Split the string into its components based on whitespace
+            String[] parts = input.trim().split(" ");
+
+            // Ensure the string contains at least 4 parts (time, zoneID, eventType, severity)
+            if (parts.length < 4) {
+                throw new IllegalArgumentException("Incomplete fire event data");
+            }
+
+            String time = parts[0];
+            int zoneID = Integer.parseInt(parts[1]);
+            String eventType = parts[2];
+            String severity = parts[3];
+
+            FireEvent event = new FireEvent(time, zoneID, eventType, severity, false);
+
+            // Check if a drone ID is included
+            if (parts.length > 4 && !isErrorType(parts[4])) {
+                event.assignDrone(parts[4]);
+            }
+
+            // Check if an error type is included
+            if (parts.length > 5) {
+                // Parse error type
+                event.setErrorFromString(parts[5]);
+            }
+
+            return event;
+
+        } catch (Exception e) {
+            System.err.println("[FireEvent] Error parsing event: " + input);
+            e.printStackTrace();
+            return null; // Return null to signify an invalid event
+        }
+    }
+
+    /**
+     * Helper method to parse error types from the string
+     */
+    private void setErrorFromString(String errorString) {
+        switch (errorString) {
+            case "NOZZLE_JAM":
+                this.error = ErrorType.NOZZLE_JAM;
+                break;
+            case "DOOR_STUCK":
+                this.error = ErrorType.DOOR_STUCK;
+                break;
+            case "DRONE_STUCK":
+                this.error = ErrorType.DRONE_STUCK;
+                break;
+            case "ARRIVAL_SENSOR_FAILED":
+                this.error = ErrorType.ARRIVAL_SENSOR_FAILED;
+                break;
+            default:
+                this.error = ErrorType.NONE;
+                break;
+        }
+    }
 
     /**
      * Returns a string representation of the fire event
@@ -195,21 +233,21 @@ public class FireEvent {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(time).append(" ")
-          .append(zoneID).append(" ")
-          .append(eventType).append(" ")
-          .append(severity);
-          
+                .append(zoneID).append(" ")
+                .append(eventType).append(" ")
+                .append(severity);
+
         // Add primary drone ID for backward compatibility
         if (assignedDroneId != null) {
             sb.append(" ").append(assignedDroneId);
         }
-        
+
         // Add error information
         sb.append(" ").append(error);
-        
+
         return sb.toString();
     }
-    
+
     /**
      * Returns a more detailed string representation including all assigned drones
      * @return A formatted string containing the event details and all assigned drones
@@ -217,13 +255,13 @@ public class FireEvent {
     public String toDetailedString() {
         StringBuilder sb = new StringBuilder();
         sb.append("FireEvent{")
-          .append("time='").append(time).append("', ")
-          .append("zoneID=").append(zoneID).append(", ")
-          .append("severity='").append(severity).append("', ")
-          .append("drones=").append(assignedDrones).append(", ")
-          .append("error=").append(error)
-          .append("}");
-          
+                .append("time='").append(time).append("', ")
+                .append("zoneID=").append(zoneID).append(", ")
+                .append("severity='").append(severity).append("', ")
+                .append("drones=").append(assignedDrones).append(", ")
+                .append("error=").append(error)
+                .append("}");
+
         return sb.toString();
     }
 
