@@ -238,7 +238,7 @@ public class Scheduler {
                 status.setErrorType(errorType);
 
                 // Check if this is a hard fault
-                if (errorType == FireEvent.ErrorType.NOZZLE_JAM) {
+                if (errorType == FireEvent.ErrorType.DOOR_STUCK) {
                     System.out.println(SchedulerColors.RED + "[SCHEDULER] HARD FAULT DETECTED: " +
                             droneId + " has a " + errorType +
                             " and is being permanently removed from service" +

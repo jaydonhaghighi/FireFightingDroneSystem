@@ -645,15 +645,14 @@ public class DroneSubsystem {
 
         //Check for drop agent timeout
         if (isDropAgentTimedOut()){
-            setError(ErrorType.NOZZLE_JAM);
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Nozzle jammed during agent drop - timeout exceeded" +
+            setError(ErrorType.DOOR_STUCK);
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Drone stuck mid air - timeout exceeded" +
                     ConsoleColors.RESET);
         }
         System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
 
-        //Reset timer
-        resetTimers();
+
     }
 
     /**
@@ -704,11 +703,12 @@ public class DroneSubsystem {
         this.currentError = errorType;
         System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] ERROR DETECTED: " +
                 errorType + ConsoleColors.RESET);
-        //If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
-        if(errorType == ErrorType.NOZZLE_JAM){
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] HARD FAULT: Shutting down drone" +
+
+        if(errorType == ErrorType.DRONE_STUCK){
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Shutting down drone" +
                     ConsoleColors.RESET);
             droneFaulted();
+
         }
     }
 
@@ -1012,8 +1012,8 @@ public class DroneSubsystem {
                         event.getError() + ConsoleColors.RESET);
                 drone.setError(event.getError());
 
-                //if it's a hard fault like nozzle/bay door fault, we abort mission!
-                if (event.getError() == ErrorType.NOZZLE_JAM) {
+
+                if (event.getError() == ErrorType.DRONE_STUCK) {
                     System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Hard fault detected, aborting mission" +
                             ConsoleColors.RESET);
                     return;
@@ -1047,9 +1047,9 @@ public class DroneSubsystem {
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
 
-            // Check if nozzle/bay door fault occurred
-            if (drone.hasError() && (drone.getCurrentError() == ErrorType.NOZZLE_JAM)){
-                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Nozzle/bay door fault detected, cannot drop agent" +
+
+            if (drone.hasError() && (drone.getCurrentError() == ErrorType.DRONE_STUCK)){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Drone stuck, cannot return to base" +
                         ConsoleColors.RESET);
                 drone.droneFaulted();
                 return;
@@ -1109,7 +1109,7 @@ public class DroneSubsystem {
             Thread.sleep(1000); // Shorter maintenance time
 
             // Clear any non-hard faults when returning to base
-            if (drone.hasError() && drone.getCurrentError() != ErrorType.NOZZLE_JAM) {
+            if (drone.hasError() && drone.getCurrentError() != ErrorType.DRONE_STUCK) {
                 System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Non-hard fault cleared during maintenance" +
                         ConsoleColors.RESET);
                 drone.clearError();
@@ -1136,7 +1136,7 @@ public class DroneSubsystem {
      * @return duration in milliseconds
      */
     private static int calculateFirefightingDuration(String severity, DroneSubsystem drone) {
-        // Use drone's specifications to calculate duration based on flow rate and nozzle open time
+
         return drone.getSpecifications().calculateFirefightingDuration(severity);
     }
     
