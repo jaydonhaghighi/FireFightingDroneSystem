@@ -55,23 +55,58 @@ public class FireIncidentSubsystem {
 
     }
 
+    /**
+     * Receives a fire event from the scheduler
+     *
+     * @return The received fire event
+     */
     public void receive() {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
+
+        // Simulate packet loss with a 10% chance
+        if (Math.random() < 0.1) {  // 10% packet loss probability
+            System.out.println("[FIRE INCIDENT SUBSYSTEM] Packet lost: message discarded");
+            return;  // Simulate packet loss by not processing the packet
+        }
+
         try {
             receieveSocket.receive(receivePacket);
         } catch (IOException e) {
-            System.out.println("receieve error: " + e);
+            System.out.println("receive error: " + e);
         }
 
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
+
+        // Simulate message corruption with a 10% chance
+        if (Math.random() < 0.1) {  // 10% corruption probability
+            int corruptIndex = (int) (Math.random() * r.length());
+            char corruptChar = r.charAt(corruptIndex);
+            String corruptedMessage = r.substring(0, corruptIndex) + (char) (corruptChar + 1) + r.substring(corruptIndex + 1);
+            r = corruptedMessage;
+            System.out.println("[FIRE INCIDENT SUBSYSTEM] Message corrupted at byte " + corruptIndex);
+        }
+
         System.out.println(FireSystemColors.GREEN + "✓ CONFIRMED: " + r + FireSystemColors.RESET);
     }
 
+    /**
+     * Sends a message to the specified port
+     *
+     * @param fire The fire event to send
+     */
     public void send(FireEvent fire) {
         String message = fire.toString();
         byte[] msg = message.getBytes();
+
+        // Simulate message corruption with a 10% chance
+        if (Math.random() < 0.1) {  // 10% corruption probability
+            int corruptIndex = (int) (Math.random() * msg.length);
+            msg[corruptIndex] = (byte) (msg[corruptIndex] + 1);  // Corrupt one byte in the message
+            System.out.println("[FIRE INCIDENT SUBSYSTEM] Message corrupted at byte " + corruptIndex);
+        }
+
         try {
             sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), 6001);
         } catch (UnknownHostException e) {
@@ -91,8 +126,6 @@ public class FireIncidentSubsystem {
      */
     public FireEvent readFile() {
         boolean error = false;
-        FireEvent.ErrorType errorType = FireEvent.ErrorType.NONE;
-
         // reads file (fire_events.txt)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
@@ -102,29 +135,9 @@ public class FireIncidentSubsystem {
                 // split line by space
                 String[] parts = line.split(" ");
 
-                //Reset error flags for each new line
-                error = false;
-                errorType = FireEvent.ErrorType.NONE;
-
-
                 if (parts.length > 4) {
-                    String errorPart = parts[4];
                     if (parts[4].equals("ERROR")) {
                         error = true;
-                    }
-                    // Check for specific error types
-                    if (errorPart.contains("NOZZLE_JAM")) {
-                        error = true;
-                        errorType = FireEvent.ErrorType.NOZZLE_JAM;
-                    } else if (errorPart.contains("DOOR_STUCK")) {
-                        error = true;
-                        errorType = FireEvent.ErrorType.DOOR_STUCK;
-                    } else if (errorPart.contains("DRONE_STUCK")) {
-                        error = true;
-                        errorType = FireEvent.ErrorType.DRONE_STUCK;
-                    } else if (errorPart.contains("ARRIVAL_SENSOR_FAILED")) {
-                        error = true;
-                        errorType = FireEvent.ErrorType.ARRIVAL_SENSOR_FAILED;
                     }
                 }
 
@@ -135,19 +148,14 @@ public class FireIncidentSubsystem {
 
                 FireEvent event = new FireEvent(time, zoneID, eventType, severity, error);
 
-                // Explicitly set the error type if a specific one was detected
-                if (errorType != FireEvent.ErrorType.NONE) {
-                    event.error = errorType;
-                }
-
                 send(event);
                 receive();
-                
+
                 // Add variable delays between fire events to simulate realistic timing
                 try {
                     // Calculate a more realistic delay based on severity
                     int delaySeconds;
-                    
+
                     switch (severity) {
                         case "high":
                             delaySeconds = 6; // High severity fires happen more frequently
@@ -161,11 +169,11 @@ public class FireIncidentSubsystem {
                         default:
                             delaySeconds = 8; // Default case
                     }
-                    
+
                     // Display countdown to next fire - simplified
                     System.out.println(FireSystemColors.CYAN + "Next fire in " + delaySeconds +
-                                     "s" + FireSystemColors.RESET);
-                    
+                            "s" + FireSystemColors.RESET);
+
                     // Sleep without so many updates
                     Thread.sleep(delaySeconds * 1000);
                 } catch (InterruptedException e) {
@@ -182,14 +190,14 @@ public class FireIncidentSubsystem {
     public static void main(String[] args){
         try{
             InetAddress ip = InetAddress.getLocalHost();
-            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events2.txt", ip);
-            
+            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
+
 
             System.out.println(FireSystemColors.GREEN + "● SYSTEM: Ready to send fire alerts" + FireSystemColors.RESET);
-            
+
             // Read all fire events from the file
             FireEvent fire = fireSystem.readFile();
-            
+
             // After sending all events, keep listening for responses
             System.out.println(FireSystemColors.CYAN + "\n● SYSTEM: All fire events processed. Monitoring..." + FireSystemColors.RESET);
             while (true) {
