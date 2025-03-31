@@ -7,6 +7,7 @@ import models.Location;
 
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,11 +21,46 @@ import static models.FireEvent.createFireEventFromString;
 class ConsoleColors {
     // Colors
     static final String RESET = "\u001B[0m";
+    // Regular colors
     static final String RED = "\u001B[31m";
     static final String GREEN = "\u001B[32m";
     static final String YELLOW = "\u001B[33m";
     static final String BLUE = "\u001B[34m";
+    static final String PURPLE = "\u001B[35m";
     static final String CYAN = "\u001B[36m";
+    static final String WHITE = "\u001B[37m";
+    static final String BLACK = "\u001B[30m";
+    static final String ORANGE = "\u001B[38;5;208m";
+    static final String PINK = "\u001B[38;5;206m";
+    static final String LIME = "\u001B[38;5;154m";
+    static final String TEAL = "\u001B[38;5;27m";
+    static final String GREY = "\u001B[38;5;240m";
+    static final String BROWN = "\u001B[38;5;130m";
+    static final String MAROON = "\u001B[38;5;88m";
+    static final String NAVY = "\u001B[38;5;18m";
+    static final String TURQUOISE = "\u001B[38;5;45m";
+    static final String MAGENTA = "\u001B[38;5;200m";
+    static final String LAVENDER = "\u001B[38;5;183m";
+    // Bold colors
+    static final String BOLD_RED = "\u001B[1;31m";
+    static final String BOLD_GREEN = "\u001B[1;32m";
+    static final String BOLD_YELLOW = "\u001B[1;33m";
+    static final String BOLD_BLUE = "\u001B[1;34m";
+    static final String BOLD_PURPLE = "\u001B[1;35m";
+    static final String BOLD_CYAN = "\u001B[1;36m";
+    static final String BOLD_WHITE = "\u001B[1;37m";
+    static final String BOLD_BLACK = "\u001B[1;30m";
+    static final String BOLD_ORANGE = "\u001B[1;38;5;208m";
+    static final String BOLD_PINK = "\u001B[1;38;5;206m";
+    static final String BOLD_LIME = "\u001B[1;38;5;154m";
+    static final String BOLD_TEAL = "\u001B[1;38;5;27m";
+    static final String BOLD_GREY = "\u001B[1;38;5;240m";
+    static final String BOLD_BROWN = "\u001B[1;38;5;130m";
+    static final String BOLD_MAROON = "\u001B[1;38;5;88m";
+    static final String BOLD_NAVY = "\u001B[1;38;5;18m";
+    static final String BOLD_TURQUOISE = "\u001B[1;38;5;45m";
+    static final String BOLD_MAGENTA = "\u001B[1;38;5;200m";
+    static final String BOLD_LAVENDER = "\u001B[1;38;5;183m";
 }
 
 /**
@@ -94,7 +130,7 @@ class Idle implements DroneState {
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
         //check if for error type here (I think)
-        System.out.println("preparing to handle new fire event: " + event);
+//        System.out.println("preparing to handle new fire event: " + event);
         context.setState(new EnRoute());
     }
     /**
@@ -105,7 +141,7 @@ class Idle implements DroneState {
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        System.out.println("drone is idle, nothing to drop");
+//        System.out.println("drone is idle, nothing to drop");
 
     }
 
@@ -118,7 +154,7 @@ class Idle implements DroneState {
      * */
     @Override
     public void returningBack(DroneSubsystem context) {
-        System.out.println("drone is idle and stationed at base.");
+//        System.out.println("drone is idle and stationed at base.");
     }
     /**
      * Drone fault status
@@ -128,7 +164,7 @@ class Idle implements DroneState {
 
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        System.out.println("drone has not faulted");
+//        System.out.println("drone has not faulted");
     }
 
     /**
@@ -140,7 +176,7 @@ class Idle implements DroneState {
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        System.out.println("drone is idle, no tasks have been completed");
+//        System.out.println("drone is idle, no tasks have been completed");
     }
 
     /**
@@ -150,7 +186,7 @@ class Idle implements DroneState {
 
     @Override
     public void displayState() {
-        System.out.println(ConsoleColors.CYAN + "IDLE" + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BOLD_YELLOW + "IDLE" + ConsoleColors.RESET);
     }
 }
 
@@ -169,7 +205,7 @@ class EnRoute implements DroneState {
      * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        System.out.println("Drone is en route, already in motion of handling an event");
+//        System.out.println("Drone is en route, already in motion of handling an event");
 
     }
 
@@ -182,7 +218,7 @@ class EnRoute implements DroneState {
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        System.out.println("drone is en route, cannot drop agent yet");
+//        System.out.println("drone is en route, cannot drop agent yet");
         context.setState(new droppingAgent());
     }
 
@@ -196,7 +232,7 @@ class EnRoute implements DroneState {
 
     @Override
     public void returningBack(DroneSubsystem context) {
-        System.out.println("drone is en route, has not returned yet"); //
+//        System.out.println("drone is en route, has not returned yet"); //
     }
 
 
@@ -207,7 +243,7 @@ class EnRoute implements DroneState {
      * **/
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        System.out.println("drone has not faulted");
+//        System.out.println("drone has not faulted");
     }
     /**
      * Drone task completion status
@@ -218,7 +254,7 @@ class EnRoute implements DroneState {
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        System.out.println("drone is en route, no tasks have been completed yet");
+//        System.out.println("drone is en route, no tasks have been completed yet");
     }
 
 
@@ -229,7 +265,7 @@ class EnRoute implements DroneState {
 
     @Override
     public void displayState() {
-        System.out.println(ConsoleColors.YELLOW + "EN ROUTE" + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BOLD_GREEN + "EN ROUTE" + ConsoleColors.RESET);
     }
 }
 /**
@@ -246,7 +282,7 @@ class droppingAgent implements DroneState {
      * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        System.out.println("drone is dropping an agent and already handling task");
+//        System.out.println("drone is dropping an agent and already handling task");
     }
 
     /**
@@ -258,7 +294,7 @@ class droppingAgent implements DroneState {
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        System.out.println("drone is currently dropping an agent");
+//        System.out.println("drone is currently dropping an agent");
     }
 
     /**
@@ -269,7 +305,7 @@ class droppingAgent implements DroneState {
      * */
     @Override
     public void returningBack(DroneSubsystem context) {
-        System.out.println("drone is dropping an agent and has not yet returned to its base");
+//        System.out.println("drone is dropping an agent and has not yet returned to its base");
         context.setState(new ArrivedToBase());
     }
     /**
@@ -280,7 +316,7 @@ class droppingAgent implements DroneState {
 
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        System.out.println("drone has not faulted");
+//        System.out.println("drone has not faulted");
     }
     /**
      * Drone task completion status
@@ -291,7 +327,7 @@ class droppingAgent implements DroneState {
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        System.out.println("drone is dropping an agent and has not yet completed its task");
+//        System.out.println("drone is dropping an agent and has not yet completed its task");
 
     }
 
@@ -302,7 +338,7 @@ class droppingAgent implements DroneState {
 
     @Override
     public void displayState() {
-        System.out.println(ConsoleColors.YELLOW + "DROPPING AGENT" + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BOLD_ORANGE + "DROPPING AGENT" + ConsoleColors.RESET);
     }
 }
 /***
@@ -319,7 +355,7 @@ class ArrivedToBase implements DroneState {
      * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        System.out.println("drone has arrived to base and cannot accept new task");
+//        System.out.println("drone has arrived to base and cannot accept new task");
 
     }
     /**
@@ -331,7 +367,7 @@ class ArrivedToBase implements DroneState {
      * */
     @Override
     public void dropAgent(DroneSubsystem context) {
-        System.out.println("drone has arrived to base and has already dropped agent");
+//        System.out.println("drone has arrived to base and has already dropped agent");
     }
 
     /**
@@ -342,7 +378,7 @@ class ArrivedToBase implements DroneState {
      * */
     @Override
     public void returningBack(DroneSubsystem context) {
-        System.out.println("drone has already arrived to base");
+//        System.out.println("drone has already arrived to base");
     }
     /**
      * Drone fault status
@@ -351,7 +387,7 @@ class ArrivedToBase implements DroneState {
      * **/
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        System.out.println("drone has arrived to base and not yet faulted");
+//        System.out.println("drone has arrived to base and not yet faulted");
         context.setState(new Fault());
     }
     /**
@@ -363,7 +399,7 @@ class ArrivedToBase implements DroneState {
 
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        System.out.println("drone has arrived to base and completed its task");
+//        System.out.println("drone has arrived to base and completed its task");
         context.setState(new Idle());
     }
 
@@ -374,7 +410,7 @@ class ArrivedToBase implements DroneState {
      * */
     @Override
     public void displayState() {
-        System.out.println(ConsoleColors.GREEN + "ARRIVED TO BASE" + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BOLD_PURPLE + "ARRIVED TO BASE" + ConsoleColors.RESET);
     }
 }
 /**
@@ -391,7 +427,7 @@ class Fault implements DroneState{
      * */
     @Override
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        System.out.println("drone has faulted and cannot handle event");
+//        System.out.println("drone has faulted and cannot handle event");
     }
     /**
      * Drone status dropping agent
@@ -403,12 +439,11 @@ class Fault implements DroneState{
 
     @Override
     public void dropAgent(DroneSubsystem context) {
-        System.out.println("drone nozzle/foam cannot open");
+//        System.out.println("drone nozzle/foam cannot open");
 
     }
     /**
      * Drone arrival status
-     *
      *
      * @param context DroneSateMachines setting drone state
      *
@@ -416,9 +451,10 @@ class Fault implements DroneState{
 
     @Override
     public void returningBack(DroneSubsystem context) {
-        System.out.println("drone has faulted and did not move");
+//        System.out.println("drone has faulted and did not move");
 
     }
+
     /**
      * Drone fault status
      *
@@ -426,20 +462,17 @@ class Fault implements DroneState{
      * **/
     @Override
     public void droneFaulted(DroneSubsystem context) {
-        System.out.println("drone has faulted");
+//        System.out.println("drone has faulted");
     }
+
     /**
      * Drone task completion status
      *
-     *
      * @param context DroneSateMachines setting drone state
-     *
      * */
-
-
     @Override
     public void taskCompleted(DroneSubsystem context) {
-        System.out.println("Drone has faulted and returned to base. Now setting to idle.");
+//        System.out.println("Drone has faulted and returned to base. Now setting to idle.");
         context.setState(new Idle());  // Once at base, transition to idle
     }
 
@@ -449,7 +482,7 @@ class Fault implements DroneState{
 
     @Override
     public void displayState() {
-        System.out.println(ConsoleColors.RED + "FAULTED" + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.BOLD_RED + "FAULTED" + ConsoleColors.RESET);
     }
 }
 
@@ -529,19 +562,19 @@ public class DroneSubsystem {
             sendSocket = new DatagramSocket(uniqueSendPort);
             receieveSocket = new DatagramSocket(uniqueReceivePort);
             
-            System.out.println(ConsoleColors.CYAN + 
-                "[DRONE " + droneId + "] Initialized at " + baseLocation + 
-                " using ports: send=" + uniqueSendPort + ", receive=" + uniqueReceivePort + 
+            System.out.println(ConsoleColors.TEAL +
+                "[" + droneId.toUpperCase() + "] Initialized at: " + ConsoleColors.BLUE + baseLocation +
+                    ConsoleColors.TEAL + " Ports:" + ConsoleColors.BLUE + " send=" + uniqueSendPort + ", receive=" + uniqueReceivePort +
                 ConsoleColors.RESET);
                 
             // Display drone specifications
-            System.out.println(ConsoleColors.CYAN + 
-                "[DRONE " + droneId + "] Specifications: Max Speed=" + specifications.getMaxSpeed() + 
+            System.out.println(ConsoleColors.TEAL +
+                    "[" + droneId.toUpperCase() + "] Specifications:" + ConsoleColors.BLUE + " Max Speed=" + specifications.getMaxSpeed() +
                 " km/h, Flow Rate=" + specifications.getFlowRate() + " L/s, Capacity=" + 
                 specifications.getCarryCapacity() + " L, Battery Life=" + specifications.getBatteryLife() + " min" +
                 ConsoleColors.RESET);
         } catch (SocketException e) {
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Socket error: " + e.getMessage() + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Socket error: " + e.getMessage() + ConsoleColors.RESET);
             e.printStackTrace();
         }
     }
@@ -562,7 +595,7 @@ public class DroneSubsystem {
 
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-        System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Received packet: " + ConsoleColors.YELLOW + r + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.PURPLE + "[" + droneId.toUpperCase() + "] Received packet: " + r + ConsoleColors.RESET);
         return createFireEventFromString(r);
     }
 
@@ -577,7 +610,7 @@ public class DroneSubsystem {
         byte[] msg = message.getBytes();
         // No need for try-catch since serverIP is already validated
         sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
-        System.out.println(ConsoleColors.BLUE + "[DRONE " + droneId + "] Sending: " + ConsoleColors.YELLOW + message + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.TEAL + "[" + droneId.toUpperCase() + "] Sending: " + ConsoleColors.BLUE + message + ConsoleColors.RESET);
         try {
             sendSocket.send(sendPacket);
         } catch (IOException e) {
@@ -609,10 +642,10 @@ public class DroneSubsystem {
      * @param event FireEvent the fire event to handle
      * */
     public void handleFireEvent(FireEvent event) {
-        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         currentState.handleFireEvent(this, event);
-        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
     }
     /**
@@ -620,10 +653,10 @@ public class DroneSubsystem {
      * */
 
     public void dropAgent() {
-        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         currentState.dropAgent(this);
-        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
     }
 
@@ -631,10 +664,10 @@ public class DroneSubsystem {
      * Drone returning to base
      * */
     public void returningBack() {
-        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         currentState.returningBack(this);
-        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
     }
 
@@ -642,10 +675,10 @@ public class DroneSubsystem {
      * Drone having a fault
      * **/
     public void droneFaulted(){
-        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         currentState.droneFaulted(this);
-        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
     }
 
@@ -653,10 +686,10 @@ public class DroneSubsystem {
      * Drone completing task
      * */
     public void taskCompleted() {
-        System.out.println(ConsoleColors.BLUE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         currentState.taskCompleted(this);
-        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
 
         if(!fireEventQueue.isEmpty()){
@@ -692,10 +725,10 @@ public class DroneSubsystem {
 
     public void scheduleFireEvent(FireEvent event){
         if (currentState instanceof Idle){
-            System.out.println("Drone is idle and ready for new fire event");
+//            System.out.println("Drone is idle and ready for new fire event");
             handleFireEvent(event);
         } else{
-            System.out.println("Drone is not idle and cannot handle a new fire event" + event);
+//            System.out.println("Drone is not idle and cannot handle a new fire event" + event);
             fireEventQueue.add(event);
         }
 
@@ -865,7 +898,7 @@ public class DroneSubsystem {
                     
                     // For multi-drone responses, indicate which response number this is
                     if (event.getAssignedDroneCount() > 1) {
-                        System.out.println(ConsoleColors.CYAN + "[DRONE " + thisDroneId + 
+                        System.out.println(ConsoleColors.CYAN + thisDroneId.toUpperCase() +
                                          "] Part of multi-drone response (" + 
                                          event.getAssignedDroneCount() + " drones total)" + 
                                          ConsoleColors.RESET);
@@ -875,13 +908,13 @@ public class DroneSubsystem {
                     // Send status update after event is processed
                     drone.sendStatusUpdate();
                 } else {
-                    System.out.println(ConsoleColors.YELLOW + "[DRONE " + thisDroneId + 
+                    System.out.println(ConsoleColors.YELLOW + thisDroneId.toUpperCase() +
                                      "] Ignoring event assigned to " + primaryDroneId + 
                                      ConsoleColors.RESET);
                 }
             }
         } catch (Exception e) {
-            System.out.println("Error in drone thread for " + drone.getDroneId() + ": " + e);
+            System.out.println("Error in drone thread for " + drone.getDroneId().toUpperCase() + ": " + e);
             e.printStackTrace();
         }
     }
@@ -897,10 +930,8 @@ public class DroneSubsystem {
             Location zoneLocation = getZoneLocation(zoneId);
             String severity = event.getSeverity();
             String droneId = drone.getDroneId();
-            
-            // ──────────────── MISSION START ─────────────────
-            System.out.println(ConsoleColors.YELLOW + "\nDRONE " + droneId + ": Mission start to Zone " + zoneId +
-                           " - " + severity + " fire" + ConsoleColors.RESET);
+
+            System.out.println(ConsoleColors.BOLD_GREEN + "\n[" + droneId.toUpperCase() + "] Mission start to Zone " + zoneId + ConsoleColors.RESET);
             
             // Update drone target location and schedule event
             drone.setTargetLocation(zoneLocation);
@@ -916,9 +947,7 @@ public class DroneSubsystem {
             // Drop agent at target location
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
-            System.out.println(ConsoleColors.RED + " DRONE " + droneId + ": Fighting fire in Zone " + zoneId +
-                           " (" + (firefightingDuration/1000) + "s, flow rate: " + 
-                           drone.getSpecifications().getFlowRate() + " L/s)" + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Fighting fire in Zone " + zoneId + ConsoleColors.RESET);
             Thread.sleep(firefightingDuration);
             
             // Determine if fire is fully extinguished or if drone has contributed its capacity
@@ -930,12 +959,12 @@ public class DroneSubsystem {
             
             if (dropCount >= dronesNeeded) {
                 // If enough drones were dispatched, fire would be fully extinguished
-                System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Fire extinguished in Zone " + zoneId +
+                System.out.println(ConsoleColors.BOLD_LIME + "[" + droneId.toUpperCase() + "] Fire extinguished in Zone " + zoneId +
                                " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
                                ConsoleColors.RESET);
             } else {
                 // Show progress with drops count
-                System.out.println(ConsoleColors.YELLOW + "DRONE " + droneId + ": Fire partially contained in Zone " + zoneId +
+                System.out.println(ConsoleColors.BOLD_YELLOW + "[" + droneId.toUpperCase() + "] Fire partially contained in Zone " + zoneId +
                                " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
                                ConsoleColors.RESET);
             }
@@ -948,7 +977,7 @@ public class DroneSubsystem {
             // Handle faults if needed
             if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
                 drone.droneFaulted();
-                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Malfunction detected!" +
+                System.out.println(ConsoleColors.RED + droneId.toUpperCase() + ": Malfunction detected!" +
                                ConsoleColors.RESET);
                 Thread.sleep(2000);
             }
@@ -962,12 +991,12 @@ public class DroneSubsystem {
             drone.taskCompleted();
             
             // ──────────────── MISSION COMPLETE ─────────────────
-            System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Mission complete, ready for next assignment\n" +
+            System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Mission complete, ready for next assignment\n" +
                            ConsoleColors.RESET);
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.out.println(ConsoleColors.RED + "DRONE " + drone.getDroneId() + ": Mission interrupted" +
+            System.out.println(ConsoleColors.RED + "[" + drone.getDroneId().toUpperCase() + "] Mission interrupted" +
                            ConsoleColors.RESET);
         }
     }
@@ -1054,8 +1083,7 @@ public class DroneSubsystem {
         String destinationType = targetLocation.equals(drone.getBaseLocation()) ? "base" : "zone";
         String speedStatus = isFaulted ? "reduced speed" : "normal speed";
         
-        System.out.println(ConsoleColors.BLUE + 
-            "DRONE " + droneId + ": Flying to " + destinationType + " (" +
+        System.out.println(ConsoleColors.LAVENDER + "[" + droneId.toUpperCase() + "] Flying to " + destinationType + " (" +
             distance + " meters, " + String.format("%.1f", travelTimeMs/1000.0) + "s, " + 
             speedStatus + ", max speed: " + maxSpeed + " km/h)" + ConsoleColors.RESET);
         
@@ -1074,16 +1102,6 @@ public class DroneSubsystem {
             // Update drone position and send status
             drone.setCurrentLocation(intermediateLocation);
             drone.sendStatusUpdate();
-            
-            // Only show progress for longer journeys
-            if (distance > 30 && steps > 1) {
-                int progressPercent = (i * 100) / steps;
-                if (i > 0 && i < steps) { // Don't show for first and last step
-                    System.out.println(ConsoleColors.BLUE + 
-                        "DRONE " + droneId + ": Flight " + progressPercent + "% complete" +
-                        ConsoleColors.RESET);
-                }
-            }
             
             // Delay between movement steps
             Thread.sleep(stepDelayMs);
