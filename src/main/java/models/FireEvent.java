@@ -32,9 +32,9 @@ public class FireEvent {
      * @param zoneID The ID of the zone the fire occurred
      * @param eventType The type of fire event
      * @param severity The severity level of the fire event (e.g., High, Medium, Low)
-     * @param error Whether to randomly assign an error (true = random error, false = no error)
+     * @param errorType The type of error for this fire event (e.g., NOZZLE_JAM, DOOR_STUCK, or NONE)
      */
-    public FireEvent(String time, int zoneID, String eventType, String severity, boolean error) {
+    public FireEvent(String time, int zoneID, String eventType, String severity, String errorType) {
         this.time = time;
         this.zoneID = zoneID;
         this.eventType = eventType;
@@ -42,13 +42,15 @@ public class FireEvent {
         this.assignedDroneId = null;
         this.assignedDrones = new HashSet<>();
 
-        // Randomly assign an error if error flag is true
-        if (error) {
+        // Set the error type based on the passed string
+        if (errorType.equals("ERROR")) {
+            // Randomly assign an error for the generic ERROR case
             ErrorType[] errorTypes = ErrorType.values();
             int randomI = new Random().nextInt(errorTypes.length - 1); // Randomly pick an error
             this.error = errorTypes[randomI];
         } else {
-            this.error = ErrorType.NONE;
+            // Try to match a specific error type
+            setErrorFromString(errorType);
         }
     }
 
@@ -180,7 +182,7 @@ public class FireEvent {
             String eventType = parts[2];
             String severity = parts[3];
 
-            FireEvent event = new FireEvent(time, zoneID, eventType, severity, false);
+            FireEvent event = new FireEvent(time, zoneID, eventType, severity, "NONE");
 
             // Check if a drone ID is included
             if (parts.length > 4 && !isErrorType(parts[4])) {
@@ -270,10 +272,11 @@ public class FireEvent {
 
     // Helper method to check if a string is an error type
     private static boolean isErrorType(String str) {
-        return str.contains("NOZZLE_JAM") ||
-                str.contains("DOOR_STUCK") ||
-                str.contains("DRONE_STUCK") ||
-                str.contains("ARRIVAL_SENSOR") ||
-                str.contains("COMMUNICATION_FAILURE");
+        return str.equals("NOZZLE_JAM") ||
+                str.equals("DOOR_STUCK") ||
+                str.equals("DRONE_STUCK") ||
+                str.equals("ARRIVAL_SENSOR_FAILED") ||
+                str.equals("COMMUNICATION_FAILURE") ||
+                str.equals("ERROR");
     }
 }

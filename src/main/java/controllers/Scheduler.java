@@ -99,12 +99,6 @@ public class Scheduler {
         receivePacket = new DatagramPacket(data, data.length);
 
         try {
-            // Simulate packet loss with a 10% chance
-            if (Math.random() < 0.1) {  // 10% packet loss probability
-                System.out.println("[SCHEDULER] Packet lost: message discarded");
-                return null;  // Simulate packet loss by not processing the packet
-            }
-
             receiveSocket.receive(receivePacket);  // Receive the packet as usual
         } catch (IOException e) {
             System.out.println("receive error: " + e);
@@ -231,7 +225,7 @@ public class Scheduler {
                         zoneId,
                         "FIRE",
                         severity,
-                        false
+                        "NONE"
                     );
                     
                     // Add to queue with high priority (at the front)
@@ -273,13 +267,6 @@ public class Scheduler {
     public void send(FireEvent fire, int port, String what, String location) {
         String message = fire.toString();
         byte[] msg = message.getBytes();
-
-        // Simulate message corruption with a 10% chance
-        if (Math.random() < 0.1) {  // 10% corruption probability
-            int corruptIndex = (int) (Math.random() * msg.length);
-            msg[corruptIndex] = (byte) (msg[corruptIndex] + 1);  // Corrupt one byte in the message
-            System.out.println("[SCHEDULER] Message corrupted at byte " + corruptIndex);
-        }
 
         try {
             sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
@@ -447,9 +434,6 @@ public class Scheduler {
             return;
         }
 
-        // Header 
-        System.out.println(SchedulerColors.LAVENDER + "[SYSTEM MAP] ("+zones.size()+" zones, "+drones.size()+" drones)" + SchedulerColors.RESET);
-
         // Show active fires
         List<Zone> firesZones = zones.values().stream()
                 .filter(Zone::hasFire)
@@ -487,7 +471,7 @@ public class Scheduler {
         if (availableCount > 0) {
             System.out.println("\n" + SchedulerColors.BOLD_LIME + availableCount + " drone(s) available" +
                     SchedulerColors.RESET);
-            System.out.println(SchedulerColors.BOLD_ORANGE + (10 - availableCount) + " drone(s) active\n" +
+            System.out.println(SchedulerColors.BOLD_ORANGE + activeDrones.size() + " drone(s) active\n" +
                            SchedulerColors.RESET);
         } else if (!drones.isEmpty()) {
             System.out.println(SchedulerColors.BOLD_YELLOW + "[WARNING] No available drones" +

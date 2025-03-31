@@ -64,12 +64,6 @@ public class FireIncidentSubsystem {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
 
-        // Simulate packet loss with a 10% chance
-        if (Math.random() < 0.1) {  // 10% packet loss probability
-            System.out.println("[FIRE INCIDENT SUBSYSTEM] Packet lost: message discarded");
-            return;  // Simulate packet loss by not processing the packet
-        }
-
         try {
             receieveSocket.receive(receivePacket);
         } catch (IOException e) {
@@ -78,18 +72,8 @@ public class FireIncidentSubsystem {
 
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-
-        // Simulate message corruption with a 5% chance
-        if (Math.random() < 0.05) {
-            int corruptIndex = (int) (Math.random() * r.length());
-            char corruptChar = r.charAt(corruptIndex);
-            String corruptedMessage = r.substring(0, corruptIndex) + (char) (corruptChar + 1) + r.substring(corruptIndex + 1);
-            r = corruptedMessage;
-            System.out.println("[FIRE INCIDENT SUBSYSTEM] Message corrupted at byte " + corruptIndex);
-        }
-
-        System.out.println(FireSystemColors.GREEN + "CONFIRMED: " + r + FireSystemColors.RESET);
-
+        
+//        System.out.println(FireSystemColors.GREEN + "CONFIRMED: " + r + FireSystemColors.RESET);
     }
 
     /**
@@ -100,13 +84,6 @@ public class FireIncidentSubsystem {
     public void send(FireEvent fire) {
         String message = fire.toString();
         byte[] msg = message.getBytes();
-
-        // Simulate message corruption with a 10% chance
-        if (Math.random() < 0.1) {  // 10% corruption probability
-            int corruptIndex = (int) (Math.random() * msg.length);
-            msg[corruptIndex] = (byte) (msg[corruptIndex] + 1);  // Corrupt one byte in the message
-            System.out.println("[FIRE INCIDENT SUBSYSTEM] Message corrupted at byte " + corruptIndex);
-        }
 
         try {
             sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), 6001);
@@ -126,7 +103,6 @@ public class FireIncidentSubsystem {
      * It continuously waits for and handles responses from the Scheduler.
      */
     public FireEvent readFile() {
-        boolean error = false;
         // reads file (fire_events.txt)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
@@ -136,18 +112,15 @@ public class FireIncidentSubsystem {
                 // split line by space
                 String[] parts = line.split(" ");
 
-                if (parts.length > 4) {
-                    if (parts[4].equals("ERROR")) {
-                        error = true;
-                    }
-                }
-
                 String time = parts[0];
                 int zoneID = Integer.parseInt(parts[1]);
                 String eventType = parts[2];
                 String severity = parts[3];
-
-                FireEvent event = new FireEvent(time, zoneID, eventType, severity, error);
+                
+                // Check if there's an error type specified in the line
+                String errorType = parts.length > 4 ? parts[4] : "NONE";
+                
+                FireEvent event = new FireEvent(time, zoneID, eventType, severity, errorType);
 
                 send(event);
                 receive();
@@ -180,7 +153,6 @@ public class FireIncidentSubsystem {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-                error = false;
             }
         } catch (IOException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
