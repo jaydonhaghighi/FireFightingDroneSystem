@@ -33,7 +33,7 @@ public class DroneManager {
      */
     private void initializeZones() {
         String zonesFile = "src/main/resources/zones.txt";
-        System.out.println("[DRONE MANAGER] Loading zones from " + zonesFile);
+//        System.out.println("[DRONE MANAGER] Loading zones from " + zonesFile);
         
         try (BufferedReader reader = new BufferedReader(new FileReader(zonesFile))) {
             String line;
@@ -58,18 +58,18 @@ public class DroneManager {
                         Zone zone = new Zone(id, x1, y1, x2, y2);
                         zones.put(id, zone);
                         zoneCount++;
-                        System.out.println("[DRONE MANAGER] Loaded zone: " + zone);
+//                        System.out.println("[DRONE MANAGER] Loaded zone: " + zone);
                     } catch (NumberFormatException e) {
-                        System.err.println("[DRONE MANAGER] Error parsing zone data: " + line);
+//                        System.err.println("[DRONE MANAGER] Error parsing zone data: " + line);
                     }
                 }
             }
             
-            System.out.println("[DRONE MANAGER] Successfully loaded " + zoneCount + " zones");
+//            System.out.println("[DRONE MANAGER] Successfully loaded " + zoneCount + " zones");
             
         } catch (IOException e) {
-            System.err.println("[DRONE MANAGER] Error reading zones file: " + e.getMessage());
-            System.err.println("[DRONE MANAGER] Falling back to default zone grid");
+//            System.err.println("[DRONE MANAGER] Error reading zones file: " + e.getMessage());
+//            System.err.println("[DRONE MANAGER] Falling back to default zone grid");
             
             // Fallback to default grid if file cannot be read
             createDefaultZones();
@@ -77,7 +77,7 @@ public class DroneManager {
         
         // Ensure we have at least some zones defined
         if (zones.isEmpty()) {
-            System.err.println("[DRONE MANAGER] No zones loaded from file, creating defaults");
+//            System.err.println("[DRONE MANAGER] No zones loaded from file, creating defaults");
             createDefaultZones();
         }
     }
@@ -91,7 +91,7 @@ public class DroneManager {
             int y = ((i-1) / 3) * 10 + 10;
             Zone zone = new Zone(i, new Location(x, y));
             zones.put(i, zone);
-            System.out.println("[DRONE MANAGER] Created default zone: " + zone);
+//            System.out.println("[DRONE MANAGER] Created default zone: " + zone);
         }
     }
     
