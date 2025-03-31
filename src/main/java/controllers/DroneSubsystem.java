@@ -929,53 +929,6 @@ public class DroneSubsystem {
     }
 
     /**
-     * Main program for droneStateMachines
-     * */
-    public static void main(String[] args) {
-        try {
-            // Create a shared specification object for all drones
-            DroneSpecifications droneSpecs = new DroneSpecifications();
-
-            // Number of drones to create
-            final int NUM_DRONES = 10;
-
-            // Arrays to store drone objects and threads
-            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
-            Thread[] threads = new Thread[NUM_DRONES];
-
-            // Create drones and threads in a loop
-            for (int i = 0; i < NUM_DRONES; i++) {
-                // Create drone with ID "drone1" through "drone10"
-                String droneId = "drone" + (i + 1);
-
-                // All drones start at same base location (0, 0)
-                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, new Location(0, 0), droneSpecs);
-
-                // Create a thread for each drone
-                final int droneIndex = i; // Need final var for lambda
-                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
-
-                // Start the thread
-                threads[i].start();
-
-                // Larger delay between drone starts to avoid port conflicts
-                Thread.sleep(500);
-            }
-
-            // Wait for all threads to complete
-            for (int i = 0; i < NUM_DRONES; i++) {
-                threads[i].join();
-            }
-
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
-            System.out.println("Error in DroneSubsystem main: " + e);
-            e.printStackTrace();
-        }
-    }
-
-    /**
      * Runs a single drone in a continuous loop
      *
      * @param drone The drone to run
@@ -1288,6 +1241,52 @@ public class DroneSubsystem {
 
         //Reset timers
         drone.resetTimers();
+    }
 
+    /**
+     * Main program for droneStateMachines
+     * */
+    public static void main(String[] args) {
+        try {
+            // Create a shared specification object for all drones
+            DroneSpecifications droneSpecs = new DroneSpecifications();
+
+            // Number of drones to create
+            final int NUM_DRONES = 10;
+
+            // Arrays to store drone objects and threads
+            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
+            Thread[] threads = new Thread[NUM_DRONES];
+
+            // Create drones and threads in a loop
+            for (int i = 0; i < NUM_DRONES; i++) {
+                // Create drone with ID "drone1" through "drone10"
+                String droneId = "drone" + (i + 1);
+
+                // All drones start at same base location (0, 0)
+                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, new Location(0, 0), droneSpecs);
+
+                // Create a thread for each drone
+                final int droneIndex = i; // Need final var for lambda
+                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
+
+                // Start the thread
+                threads[i].start();
+
+                // Larger delay between drone starts to avoid port conflicts
+                Thread.sleep(500);
+            }
+
+            // Wait for all threads to complete
+            for (int i = 0; i < NUM_DRONES; i++) {
+                threads[i].join();
+            }
+
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Error in DroneSubsystem main: " + e);
+            e.printStackTrace();
+        }
     }
 }

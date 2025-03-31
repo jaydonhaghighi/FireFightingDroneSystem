@@ -19,6 +19,10 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - **State Machine Logic**: Robust state transitions for each drone
 - **Workload Balancing**: Ensures even distribution of tasks across the drone fleet
 - **Enhanced Console Output**: Clear, color-coded status information with minimal redundancy
+- **Fault Detection & Recovery**: Detects movement timeouts, nozzle jams, door stuck conditions and sensor failures
+- **Hardware Fault Simulation**: Simulates critical drone hardware failures
+- **Timing Diagrams**: Generates comprehensive timing reports for drone operations
+- **Multi-Drone Fire Response**: Dispatches multiple drones for higher severity fires
 
 ---
 
@@ -29,6 +33,7 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - **Location**: Represents a 2D coordinate with distance calculation and path detection
 - **Zone**: Defines a geographic area with boundaries and fire status tracking
 - **DroneStatus**: Tracks a drone's current state, location, task, and mission history
+- **DroneSpecifications**: Defines drone capabilities like speed, acceleration, carrying capacity, and flow rate
 
 ### Controllers
 - **FireIncidentSubsystem**: Reads fire events from input file and sends to Scheduler
@@ -70,9 +75,17 @@ java -cp bin controllers.FireIncidentSubsystem
 
 The system reads fire events from `src/main/resources/fire_events.txt` with the format:
 ```
+# Regular fire events with no errors
 14:03:15 1 FIRE_DETECTED High
 14:12:00 2 FIRE_DETECTED Moderate
 14:15:00 3 FIRE_DETECTED Low
+
+# Fire events with specific errors
+14:08:30 4 FIRE_DETECTED Moderate DRONE_STUCK
+14:10:45 6 FIRE_DETECTED High NOZZLE_JAM
+
+# Fire event with random error injection
+14:03:15 5 FIRE_DETECTED High ERROR
 ```
 
 Each line contains:
@@ -80,6 +93,7 @@ Each line contains:
 - Zone ID
 - Event type
 - Severity (High, Moderate, Low)
+- Optional error type (DRONE_STUCK, NOZZLE_JAM, DOOR_STUCK, ARRIVAL_SENSOR_FAILED, or ERROR for random error)
 
 ### Zones (`zones.txt`)
 
@@ -128,37 +142,33 @@ Each line defines a zone with:
 [DRONE] Registered with scheduler
 [DRONE] Current state: Idle
 
-[DRONE] Received packet: 14:03:15 1 FIRE_DETECTED High drone1
+[DRONE drone1] Received packet: 14:03:15 1 FIRE_DETECTED High
 [DRONE] Processing fire event: 14:03:15 1 FIRE_DETECTED High
-[DRONE] Transitioning from Idle to TakingOff
-[DRONE] Taking off...
+[DRONE] State before: IDLE
+[DRONE] State after: EN ROUTE
 
-[DRONE] Transitioning from TakingOff to EnRoute
-[DRONE] En route to fire at zone 1
-[DRONE] Moving to location (5,5)...
-[DRONE] Current position: (3,3)
-[DRONE] Current position: (5,5)
+DRONE drone1: Mission start to Zone 1 - High fire
+DRONE drone1: Flying to zone (1050 meters, 10.5s, normal speed, max speed: 35.0 km/h)
+DRONE drone1: Flight 50% complete
+DRONE drone1: Successfully dropped agent at Zone 1
+DRONE drone1: Fighting fire in Zone 1 (8s, flow rate: 2.0 L/s)
+DRONE drone1: Fire extinguished in Zone 1 (Drops: 1/3)
+DRONE drone1: Returning to base after mission
+DRONE drone1: Flying to base (1050 meters, 10.5s, normal speed, max speed: 35.0 km/h)
+DRONE drone1: Flight 50% complete
+DRONE drone1: Mission complete, ready for next assignment
 
-[DRONE] Transitioning from EnRoute to AtLocation
-[DRONE] Arrived at fire location
-[DRONE] Starting fire assessment...
+# Example with fault:
+[DRONE drone3] Received packet: 14:10:45 6 FIRE_DETECTED High NOZZLE_JAM
+[DRONE drone3] Error injected from input: NOZZLE_JAM
+[DRONE drone3] Hard fault detected, aborting mission
+[DRONE drone3] ERROR DETECTED: NOZZLE_JAM
+[DRONE drone3] HARD FAULT: Shutting down drone
 
-[DRONE] Transitioning from AtLocation to Extinguishing
-[DRONE] Extinguishing fire...
-[DRONE] High severity fire - operation will take 8 seconds
-
-[DRONE] Transitioning from Extinguishing to ReturningToBase
-[DRONE] Fire extinguished, returning to base
-[DRONE] Moving to base at (0,0)...
-[DRONE] Current position: (3,3)
-[DRONE] Current position: (0,0)
-
-[DRONE] Transitioning from ReturningToBase to ArrivedToBase
-[DRONE] Arrived at base
-[DRONE] Preparing for next mission...
-
-[DRONE] Transitioning from ArrivedToBase to Idle
-[DRONE] Ready for next mission
+# Timing diagram at end of program:
+DRONE drone1 CYCLE: running 10.5s, running 8.0s, running 10.5s, idle 4.8s
+DRONE drone2 CYCLE: running 12.3s, preempted (fault) 3.2s, idle 5.0s
+DRONE drone3 CYCLE: idle 2.0s, preempted (fault) 10.5s
 ```
 
 
