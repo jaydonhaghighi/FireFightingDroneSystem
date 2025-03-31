@@ -1,4 +1,4 @@
-# Fire Fighting Drone System (Iteration #3)
+# Fire Fighting Drone System (Iteration #4)
 
 ## Overview
 
@@ -25,6 +25,15 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - **Multi-Drone Fire Response**: Dispatches multiple drones for higher severity fires
 
 ---
+Work Breakdown:
+
+Brendan: Fault injecttion and class diagrams
+Bola: Nozzle Jam
+Leen: Packet Loss
+Raiqah: Drone Stuck Midair
+Zeena: Drone Stuck Midair
+Jaydon: Fault Injection
+
 
 ## Class Descriptions
 
