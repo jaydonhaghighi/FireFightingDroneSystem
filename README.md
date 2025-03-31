@@ -25,16 +25,17 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - **Multi-Drone Fire Response**: Dispatches multiple drones for higher severity fires
 
 ---
-Work Breakdown:
+## Team Contributions
 
-Brendan: Fault injecttion and class diagrams
-Bola: Nozzle Jam
-Leen: Packet Loss
-Raiqah: Drone Stuck Midair
-Zeena: Drone Stuck Midair
-Jaydon: Fault Injection
+- `Brendan:` Fault injecttion and class diagram
+- `Abolarinwa:` Implementing fault handling for Nozzle Jam
+- `Zeena:`Implementing fault handling for drone stuck in mid-air
+- `Jaydon:` Timing diagram, fixing bugs, code review
+- `Raiqah:` Implementing fault handling for drone stuck in mid-air
+- `Leen:` Implementing fault handling for packet loss
 
 
+---
 ## Class Descriptions
 
 ### Models
