@@ -189,9 +189,10 @@ public class DroneManager {
             return enRouteDrone;
         }
         
-        // Otherwise, find available drone with balanced workload and proximity
+        // find available drone with balanced workload and proximity
         List<DroneStatus> availableDrones = drones.values().stream()
-            .filter(DroneStatus::isAvailable)
+                .filter(DroneStatus::isAvailable)
+                .filter(drone -> !drone.hasHardFault()) // Explicitly exclude drones with hard faults
             .sorted(Comparator.comparingInt(DroneStatus::getZonesServiced)
                     .thenComparingInt(d -> d.distanceTo(fireLocation)))
             .toList();

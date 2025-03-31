@@ -11,6 +11,7 @@ public class DroneStatus {
     private FireEvent currentTask;
     private int zonesServiced;
     private long lastUpdateTime;
+    private FireEvent.ErrorType errorType = FireEvent.ErrorType.NONE;
     private DroneSpecifications specifications;
     
     /**
@@ -110,6 +111,7 @@ public class DroneStatus {
         this.state = state;
         this.lastUpdateTime = System.currentTimeMillis();
     }
+
     
     /**
      * Gets the drone's current task
@@ -160,8 +162,10 @@ public class DroneStatus {
      * @return true if available, false otherwise
      */
     public boolean isAvailable() {
-        // Check case insensitive since state names might come in different cases
-        return "IDLE".equalsIgnoreCase(state) || "Idle".equalsIgnoreCase(state);
+        // A drone is available if it's in the Idle state and doesn't have a hard fault
+        boolean isHardFault = (errorType == FireEvent.ErrorType.NOZZLE_JAM);
+        // Check case-insensitive since state names might come in different cases
+        return (("IDLE".equalsIgnoreCase(state) || "Idle".equalsIgnoreCase(state)) && !isHardFault);
     }
     
     /**
@@ -172,6 +176,32 @@ public class DroneStatus {
      */
     public int distanceTo(Location location) {
         return currentLocation.distanceTo(location);
+    }
+
+    /**
+     * Gets the current error type
+     * @return the error type
+     */
+    public FireEvent.ErrorType getErrorType() {
+        return errorType;
+    }
+
+    /**
+     * Sets the error type
+     * @param errorType the error type to set
+     */
+    public void setErrorType(FireEvent.ErrorType errorType) {
+        this.errorType = errorType;
+        this.lastUpdateTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Checks if the drone has a hard fault
+     *
+     * @return true if the drone has a hard fault, false otherwise
+     */
+    public boolean hasHardFault() {
+        return (errorType == FireEvent.ErrorType.NOZZLE_JAM);
     }
     
     /**
@@ -215,8 +245,11 @@ public class DroneStatus {
     
     @Override
     public String toString() {
-        return "Drone " + droneId + ": [" + state + "] at " + currentLocation + 
+        String errorInfo = (errorType != FireEvent.ErrorType.NONE) ?
+                ", error: " + errorType : "";
+        return "Drone " + droneId + ": [" + state + "]" + errorInfo + " at " + currentLocation +
                (currentTask != null ? ", handling: " + currentTask.getZoneID() : "") +
                ", zones serviced: " + zonesServiced;
     }
+
 }

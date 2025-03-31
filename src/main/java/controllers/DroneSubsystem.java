@@ -15,6 +15,8 @@ import java.net.*;
 
 import static models.FireEvent.createFireEventFromString;
 
+import static models.FireEvent.ErrorType;
+
 /**
  * ANSI colors for console output
  */
@@ -493,15 +495,22 @@ class Fault implements DroneState{
 public class DroneSubsystem {
     //current state of drone
     private DroneState currentState;
-    private Queue<FireEvent> fireEventQueue; // Queue for fire events
-    private String droneId; // Unique identifier for this drone
-    private Location currentLocation; // Current physical location
-    private Location targetLocation; // Target location for movement
-    private Location baseLocation; // Home base location
-    private DroneSpecifications specifications; // Technical specifications of the drone
-    
-    // Static map to track drops by zone ID
+    private Queue<FireEvent> fireEventQueue;
+    private String droneId;
+    private Location currentLocation; // current physical location
+    private Location targetLocation; // target location for movement
+    private Location baseLocation; // home base location
+    private DroneSpecifications specifications; // specifications of drone
+
+    // map to track drops by zone ID
     private static final Map<Integer, Integer> zoneDropsMap = new ConcurrentHashMap<>();
+
+    private long movementStartTime = 0;
+    private long dropAgentStartTime = 0;
+    private static final long MAX_MOVEMENT_TIME = 30000; //30 seconds max for movement
+    private static final long MAX_DROP_AGENT_TIME = 15000; // 15 seconds max for dropping agent
+    private ErrorType currentError = ErrorType.NONE;
+
 
     private final InetAddress serverIP;
 
@@ -510,7 +519,7 @@ public class DroneSubsystem {
 
     private final int sendPort = 7000;
     private final int receivePort = 7001;
-    
+
     /**
      * Constructor
      * @param serverIP The IP address of the scheduler server
@@ -518,7 +527,7 @@ public class DroneSubsystem {
     public DroneSubsystem(InetAddress serverIP) {
         this(serverIP, "drone1", new Location(0, 0));
     }
-    
+
     /**
      * Constructor with drone ID and base location
      * @param serverIP The IP address of the scheduler server
@@ -528,7 +537,7 @@ public class DroneSubsystem {
     public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation) {
         this(serverIP, droneId, baseLocation, new DroneSpecifications());
     }
-    
+
     /**
      * Constructor with drone ID, base location, and specifications
      * @param serverIP The IP address of the scheduler server
@@ -581,16 +590,30 @@ public class DroneSubsystem {
 
     /**
      * Receives a fire event from the scheduler
-     * 
+     *
      * @return The received fire event
      */
     public FireEvent receive() {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
+
+        // Simulate 10% packet loss
+        if (Math.random() < 0.1) {  // 10% chance of packet loss
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Packet lost!" + ConsoleColors.RESET);
+            return null;  // No packet to process
+        }
+
         try {
             receieveSocket.receive(receivePacket);
         } catch (IOException e) {
             System.out.println("receieve error: " + e);
+        }
+
+        // Simulate 10% message corruption
+        if (Math.random() < 0.1) {  // 10% chance of corruption
+            int corruptIndex = (int) (Math.random() * data.length);
+            data[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Message corrupted!" + ConsoleColors.RESET);
         }
 
         int len = receivePacket.getLength();
@@ -599,16 +622,29 @@ public class DroneSubsystem {
         return createFireEventFromString(r);
     }
 
+
     /**
      * Sends a message to the specified port
-     * 
+     *
      * @param message The message to send
      * @param port The port to send to
      */
     public void send(String message, int port) {
-        //String message = fire.toString();
+        // Simulate 10% packet loss
+        if (Math.random() < 0.1) {  // 10% chance of packet loss
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Packet lost, not sending!" + ConsoleColors.RESET);
+            return;  // Skip sending this message
+        }
+
         byte[] msg = message.getBytes();
-        // No need for try-catch since serverIP is already validated
+
+        // Simulate 10% message corruption
+        if (Math.random() < 0.1) {  // 10% chance of corruption
+            int corruptIndex = (int) (Math.random() * msg.length);
+            msg[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Message corrupted!" + ConsoleColors.RESET);
+        }
+
         sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
         System.out.println(ConsoleColors.TEAL + "[" + droneId.toUpperCase() + "] Sending: " + ConsoleColors.BLUE + message + ConsoleColors.RESET);
         try {
@@ -617,15 +653,16 @@ public class DroneSubsystem {
             e.printStackTrace();
         }
     }
-    
+
     /**
      * Sends a status update to the scheduler
      */
     public void sendStatusUpdate() {
-        String status = droneId + " " + 
-                        currentState.getClass().getSimpleName() + " " + 
-                        currentLocation.getX() + " " + 
-                        currentLocation.getY();
+        String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
+        String status = droneId + " " +
+                currentState.getClass().getSimpleName() + errorInfo + " " +
+                currentLocation.getX() + " " +
+                currentLocation.getY();
         send(status, 6001); // Send to scheduler
     }
 
@@ -644,6 +681,13 @@ public class DroneSubsystem {
     public void handleFireEvent(FireEvent event) {
         System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
+
+        // Check if the event has an error
+        if(event.hasError()){
+            setError(event.getError());
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Error detected in fire event: " +
+                    event.getError() + ConsoleColors.RESET);
+        }
         currentState.handleFireEvent(this, event);
         System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
@@ -655,9 +699,26 @@ public class DroneSubsystem {
     public void dropAgent() {
         System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
+        //Start drop agent timer
+        startDropAgentTimer();
+
         currentState.dropAgent(this);
+
         System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
+
+
+        //Check for drop agent timeout
+        if (isDropAgentTimedOut()){
+            setError(ErrorType.NOZZLE_JAM);
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Nozzle jammed during agent drop - timeout exceeded" +
+                    ConsoleColors.RESET);
+        }
+        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
+      
         currentState.displayState();
+
+        //Reset timer
+        resetTimers();
     }
 
     /**
@@ -701,6 +762,85 @@ public class DroneSubsystem {
     }
 
     /**
+     * Sets an error on the drone
+     * @param errorType The type of error
+     */
+    public void setError(ErrorType errorType) {
+        this.currentError = errorType;
+        System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] ERROR DETECTED: " +
+                errorType + ConsoleColors.RESET);
+        //If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
+        if(errorType == ErrorType.NOZZLE_JAM){
+            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] HARD FAULT: Shutting down drone" +
+                    ConsoleColors.RESET);
+            droneFaulted();
+        }
+    }
+
+    /**
+     * Checks if the drone has an error
+     * @return true if the drone has an error
+     */
+    public boolean hasError() {
+        return currentError != ErrorType.NONE;
+    }
+
+    /**
+     * Gets the current error
+     * @return the current error
+     */
+    public ErrorType getCurrentError() {
+        return currentError;
+    }
+
+    /**
+     * Clears the current error
+     */
+    public void clearError() {
+        this.currentError = ErrorType.NONE;
+    }
+
+    /**
+     * Starts the movement timer
+     */
+    public void startMovementTimer() {
+        this.movementStartTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Checks if movement has timed out
+     * @return true if movement has timed out
+     */
+    public boolean isMovementTimedOut() {
+        if (movementStartTime == 0) return false;
+        return (System.currentTimeMillis() - movementStartTime) > MAX_MOVEMENT_TIME;
+    }
+
+    /**
+     * Starts the drop agent timer
+     */
+    public void startDropAgentTimer() {
+        this.dropAgentStartTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Checks if drop agent has timed out
+     * @return true if drop agent has timed out
+     */
+    public boolean isDropAgentTimedOut() {
+        if (dropAgentStartTime == 0) return false;
+        return (System.currentTimeMillis() - dropAgentStartTime) > MAX_DROP_AGENT_TIME;
+    }
+
+    /**
+     * Resets all timers
+     */
+    public void resetTimers() {
+        this.movementStartTime = 0;
+        this.dropAgentStartTime = 0;
+    }
+
+    /**
      * Get the name of the current drone state
      */
     public String getCurrentStateName() {
@@ -736,166 +876,122 @@ public class DroneSubsystem {
 
     /**
      * Gets the drone's ID
-     * 
+     *
      * @return the drone ID
      */
     public String getDroneId() {
         return droneId;
     }
-    
+
     /**
      * Gets the drone's current location
-     * 
+     *
      * @return the current location
      */
     public Location getCurrentLocation() {
         return currentLocation;
     }
-    
+
     /**
      * Sets the drone's current location
-     * 
+     *
      * @param location the new location
      */
     public void setCurrentLocation(Location location) {
         this.currentLocation = location;
     }
-    
+
     /**
      * Gets the drone's target location
-     * 
+     *
      * @return the target location
      */
     public Location getTargetLocation() {
         return targetLocation;
     }
-    
+
     /**
      * Sets the drone's target location
-     * 
+     *
      * @param location the new target location
      */
     public void setTargetLocation(Location location) {
         this.targetLocation = location;
     }
-    
+
     /**
      * Gets the drone's base location
-     * 
+     *
      * @return the base location
      */
     public Location getBaseLocation() {
         return baseLocation;
     }
-    
+
     /**
      * Gets the drone's specifications
-     * 
+     *
      * @return the drone specifications
      */
     public DroneSpecifications getSpecifications() {
         return specifications;
     }
-    
+
     /**
      * Sets the drone's specifications
-     * 
+     *
      * @param specifications the new specifications
      */
     public void setSpecifications(DroneSpecifications specifications) {
         this.specifications = specifications;
     }
-    
+
     /**
      * Records a drop for a zone and returns the current count
-     * 
+     *
      * @param zoneId the zone ID where drop occurred
      * @return the updated drop count for the zone
      */
     public static int recordDropForZone(int zoneId) {
         return zoneDropsMap.compute(zoneId, (key, value) -> (value == null) ? 1 : value + 1);
     }
-    
+
     /**
      * Gets the current drop count for a zone
-     * 
+     *
      * @param zoneId the zone ID
      * @return the number of drops for the zone, or 0 if none
      */
     public static int getDropsForZone(int zoneId) {
         return zoneDropsMap.getOrDefault(zoneId, 0);
     }
-    
-    /**
-     * Main program for droneStateMachines
-     * */
-    public static void main(String[] args) {
-        try {
-            // Create a shared specification object for all drones
-            DroneSpecifications droneSpecs = new DroneSpecifications();
-            
-            // Number of drones to create
-            final int NUM_DRONES = 10;
-            
-            // Arrays to store drone objects and threads
-            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
-            Thread[] threads = new Thread[NUM_DRONES];
-            
-            // Create drones and threads in a loop
-            for (int i = 0; i < NUM_DRONES; i++) {
-                // Create drone with ID "drone1" through "drone10"
-                String droneId = "drone" + (i + 1);
-                
-                // All drones start at same base location (0, 0)
-                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, new Location(0, 0), droneSpecs);
-                
-                // Create a thread for each drone
-                final int droneIndex = i; // Need final var for lambda
-                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
-                
-                // Start the thread
-                threads[i].start();
-                
-                // Larger delay between drone starts to avoid port conflicts
-                Thread.sleep(500);
-            }
-            
-            // Wait for all threads to complete
-            for (int i = 0; i < NUM_DRONES; i++) {
-                threads[i].join();
-            }
-            
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
-            System.out.println("Error in DroneSubsystem main: " + e);
-            e.printStackTrace();
-        }
-    }
-    
+
     /**
      * Runs a single drone in a continuous loop
-     * 
+     *
      * @param drone The drone to run
      */
     private static void runDrone(DroneSubsystem drone) {
         try {
             // Send initial status to scheduler
             drone.sendStatusUpdate();
-            
+
             // Continuously process fire events until interrupted
             while (true) {
                 FireEvent event = drone.receive();
-                
+                if (event == null) {
+                    System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + "] Event is null, skipping." + ConsoleColors.RESET);
+                    return;  // Skip processing this event
+                }
                 // Process events assigned to this drone (either as primary or as part of multi-drone response)
                 String primaryDroneId = event.getAssignedDroneId();
                 String thisDroneId = drone.getDroneId();
-                
+
                 // Check if this drone should respond - either it's assigned directly or it's one of multiple drones assigned
-                if (primaryDroneId == null || 
-                    primaryDroneId.equals(thisDroneId) || 
-                    event.isDroneAssigned(thisDroneId)) {
-                    
+                if (primaryDroneId == null ||
+                        primaryDroneId.equals(thisDroneId) ||
+                        event.isDroneAssigned(thisDroneId)) {
+
                     // For multi-drone responses, indicate which response number this is
                     if (event.getAssignedDroneCount() > 1) {
                         System.out.println(ConsoleColors.CYAN + thisDroneId.toUpperCase() +
@@ -903,7 +999,7 @@ public class DroneSubsystem {
                                          event.getAssignedDroneCount() + " drones total)" + 
                                          ConsoleColors.RESET);
                     }
-                    
+
                     processEvent(drone, event);
                     // Send status update after event is processed
                     drone.sendStatusUpdate();
@@ -933,30 +1029,70 @@ public class DroneSubsystem {
 
             System.out.println(ConsoleColors.BOLD_GREEN + "\n[" + droneId.toUpperCase() + "] Mission start to Zone " + zoneId + ConsoleColors.RESET);
             
+            //Check for injected errors from the event
+            if(event.hasError()){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Error injected from input: " +
+                        event.getError() + ConsoleColors.RESET);
+                drone.setError(event.getError());
+
+                //if it's a hard fault like nozzle/bay door fault, we abort mission!
+                if (event.getError() == ErrorType.NOZZLE_JAM) {
+                    System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Hard fault detected, aborting mission" +
+                            ConsoleColors.RESET);
+                    return;
+                }
+            }
+
+            // ──────────────── MISSION START ─────────────────
+            System.out.println(ConsoleColors.YELLOW + "\nDRONE " + droneId + ": Mission start to Zone " + zoneId +
+                    " - " + severity + " fire" + ConsoleColors.RESET);
+
             // Update drone target location and schedule event
             drone.setTargetLocation(zoneLocation);
             drone.scheduleFireEvent(event);
             Thread.sleep(1000); // Preparation delay
-            
+
             // Fly to zone
             simulateMovement(drone, zoneLocation);
-            
+
+            //Check if movement failed
+            if(drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Movement fault detected, cannot reach zone" +
+                        ConsoleColors.RESET);
+                drone.droneFaulted();
+                return;
+            }
+
             // Calculate firefighting duration based on severity and drone specifications
             int firefightingDuration = calculateFirefightingDuration(severity, drone);
-            
+
             // Drop agent at target location
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
+
             System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Fighting fire in Zone " + zoneId + ConsoleColors.RESET);
+
+            // Check if nozzle/bay door fault occurred
+            if (drone.hasError() && (drone.getCurrentError() == ErrorType.NOZZLE_JAM)){
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Nozzle/bay door fault detected, cannot drop agent" +
+                        ConsoleColors.RESET);
+                drone.droneFaulted();
+                return;
+            }
+
+
+            System.out.println(ConsoleColors.RED + " DRONE " + droneId + ": Fighting fire in Zone " + zoneId +
+                    " (" + (firefightingDuration/1000) + "s, flow rate: " +
+                    drone.getSpecifications().getFlowRate() + " L/s)" + ConsoleColors.RESET);
             Thread.sleep(firefightingDuration);
-            
+
             // Determine if fire is fully extinguished or if drone has contributed its capacity
             int dronesNeeded = getRequiredDronesForSeverity(severity);
             boolean fullCapacityUsed = true; // Assume drone used full capacity
-            
+
             // Increment the drops counter for this zone
             int dropCount = recordDropForZone(zoneId);
-            
+
             if (dropCount >= dronesNeeded) {
                 // If enough drones were dispatched, fire would be fully extinguished
                 System.out.println(ConsoleColors.BOLD_LIME + "[" + droneId.toUpperCase() + "] Fire extinguished in Zone " + zoneId +
@@ -968,29 +1104,46 @@ public class DroneSubsystem {
                                " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
                                ConsoleColors.RESET);
             }
-            
+
             // Return to base
             drone.setTargetLocation(drone.getBaseLocation());
             drone.returningBack();
             Thread.sleep(500);
-            
+
             // Handle faults if needed
             if ("DRONE_FAULT".equalsIgnoreCase(event.getEventType())) {
                 drone.droneFaulted();
+              
                 System.out.println(ConsoleColors.RED + droneId.toUpperCase() + ": Malfunction detected!" +
                                ConsoleColors.RESET);
+
                 Thread.sleep(2000);
             }
-            
+
             // Return flight
             simulateMovement(drone, drone.getBaseLocation());
-            
+
+            // Check if movement failed during return
+            if (drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK) {
+                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Movement fault detected during return, cannot reach base" +
+                        ConsoleColors.RESET);
+                drone.droneFaulted();
+                return;
+            }
+
             // Complete the task and perform maintenance
             drone.setCurrentLocation(drone.getBaseLocation());
             Thread.sleep(1000); // Shorter maintenance time
+
+            // Clear any non-hard faults when returning to base
+            if (drone.hasError() && drone.getCurrentError() != ErrorType.NOZZLE_JAM) {
+                System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Non-hard fault cleared during maintenance" +
+                        ConsoleColors.RESET);
+                drone.clearError();
+            }
+
             drone.taskCompleted();
-            
-            // ──────────────── MISSION COMPLETE ─────────────────
+
             System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Mission complete, ready for next assignment\n" +
                            ConsoleColors.RESET);
             
@@ -1000,10 +1153,10 @@ public class DroneSubsystem {
                            ConsoleColors.RESET);
         }
     }
-    
+
     /**
      * Calculate firefighting duration based on fire severity using drone specifications
-     * 
+     *
      * @param severity the fire severity
      * @param drone the drone to use for calculations
      * @return duration in milliseconds
@@ -1012,10 +1165,10 @@ public class DroneSubsystem {
         // Use drone's specifications to calculate duration based on flow rate and nozzle open time
         return drone.getSpecifications().calculateFirefightingDuration(severity);
     }
-    
+
     /**
      * Determines the number of drones required to extinguish a fire based on severity
-     * 
+     *
      * @param severity the fire severity
      * @return the number of drones needed
      */
@@ -1030,10 +1183,10 @@ public class DroneSubsystem {
                 return 1; // 10L water needed
         }
     }
-    
+
     /**
      * Gets a zone location based on zone ID
-     * 
+     *
      * @param zoneId the zone ID
      * @return the location of the zone center in meters
      */
@@ -1043,10 +1196,10 @@ public class DroneSubsystem {
         int y = ((zoneId-1) / 3) * 600 + 300; // 600m tall zones, centered at y+300
         return new Location(x, y);
     }
-    
+
     /**
      * Simulates drone movement with simplified output, using drone specifications
-     * 
+     *
      * @param drone the drone to move
      * @param targetLocation the target location
      */
@@ -1055,30 +1208,35 @@ public class DroneSubsystem {
         int distance = currentLocation.distanceTo(targetLocation);
         boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");
         String droneId = drone.getDroneId();
-        
+
+        //Start movement timer
+        drone.startMovementTimer();
         // If locations are the same, no movement needed
-        if (distance == 0) return;
-        
+        if (distance == 0){
+            drone.resetTimers();
+            return;
+        }
+
         // Get drone specifications
         DroneSpecifications specs = drone.getSpecifications();
-        
+
         // Calculate travel time based on drone specs including acceleration/deceleration
         double maxSpeed = isFaulted ? specs.getMaxSpeed() * 0.5 : specs.getMaxSpeed(); // Reduced speed if faulted
-        
+
         // Temporarily modify specifications if drone is faulted
         double originalMaxSpeed = specs.getMaxSpeed();
         if (isFaulted) {
             specs.setMaxSpeed(maxSpeed);
         }
-        
+
         // Calculate travel time using drone specs (includes acceleration/deceleration)
         int travelTimeMs = specs.calculateTravelTime(distance);
-        
+
         // Restore original max speed
         if (isFaulted) {
             specs.setMaxSpeed(originalMaxSpeed);
         }
-        
+
         // Show flight start status
         String destinationType = targetLocation.equals(drone.getBaseLocation()) ? "base" : "zone";
         String speedStatus = isFaulted ? "reduced speed" : "normal speed";
@@ -1091,24 +1249,76 @@ public class DroneSubsystem {
         int steps = Math.min(3, distance / 10); // max 3 steps for any distance
         if (steps == 0) steps = 1; // at least 1 step
         int stepDelayMs = travelTimeMs / steps;
-        
+
         // Simulate movement in steps
         for (int i = 1; i <= steps; i++) {
             // Calculate intermediate position
             int x = currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * i / steps;
             int y = currentLocation.getY() + (targetLocation.getY() - currentLocation.getY()) * i / steps;
             Location intermediateLocation = new Location(x, y);
-            
+
             // Update drone position and send status
             drone.setCurrentLocation(intermediateLocation);
             drone.sendStatusUpdate();
-            
+          
             // Delay between movement steps
             Thread.sleep(stepDelayMs);
         }
-        
+
         // Ensure final position is exactly the target
-        drone.setCurrentLocation(targetLocation);
-        drone.sendStatusUpdate();
+        if(!drone.hasError() || drone.getCurrentError() != ErrorType.DRONE_STUCK){
+            drone.setCurrentLocation(targetLocation);
+            drone.sendStatusUpdate();
+        }
+
+        //Reset timers
+        drone.resetTimers();
+    }
+
+    /**
+     * Main program for droneStateMachines
+     * */
+    public static void main(String[] args) {
+        try {
+            // Create a shared specification object for all drones
+            DroneSpecifications droneSpecs = new DroneSpecifications();
+
+            // Number of drones to create
+            final int NUM_DRONES = 10;
+
+            // Arrays to store drone objects and threads
+            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
+            Thread[] threads = new Thread[NUM_DRONES];
+
+            // Create drones and threads in a loop
+            for (int i = 0; i < NUM_DRONES; i++) {
+                // Create drone with ID "drone1" through "drone10"
+                String droneId = "drone" + (i + 1);
+
+                // All drones start at same base location (0, 0)
+                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, new Location(0, 0), droneSpecs);
+
+                // Create a thread for each drone
+                final int droneIndex = i; // Need final var for lambda
+                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
+
+                // Start the thread
+                threads[i].start();
+
+                // Larger delay between drone starts to avoid port conflicts
+                Thread.sleep(500);
+            }
+
+            // Wait for all threads to complete
+            for (int i = 0; i < NUM_DRONES; i++) {
+                threads[i].join();
+            }
+
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Error in DroneSubsystem main: " + e);
+            e.printStackTrace();
+        }
     }
 }

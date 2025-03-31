@@ -167,7 +167,7 @@ public class DroneManagerTest {
         busyDrone.setState("EN ROUTE");
 
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
 
         // Test selection
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -193,7 +193,7 @@ public class DroneManagerTest {
         }
 
         // Create a fire event for zone 1
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
 
         // Test selection
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -218,7 +218,7 @@ public class DroneManagerTest {
         farDrone.setState("IDLE");
 
         // Create a fire event for zone 1
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
 
         // Test selection
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -234,7 +234,7 @@ public class DroneManagerTest {
         busyDrone.setState("EN ROUTE");
 
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
 
         // Test selection with no available drones
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -248,7 +248,7 @@ public class DroneManagerTest {
         DroneStatus drone = droneManager.registerDrone(droneId);
 
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
         Location newLocation = new Location(15, 15);
 
         // Update drone status
@@ -281,7 +281,7 @@ public class DroneManagerTest {
         // Test updating a drone that doesn't exist (should not throw exception)
         String nonExistentId = "nonexistent";
         Location location = new Location(10, 10);
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH");
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
 
         // This should not throw an exception
         droneManager.updateDroneStatus(nonExistentId, "EN ROUTE", location, event);
