@@ -28,16 +28,11 @@ class SchedulerColors {
     static final String LAVENDER = "\u001B[38;5;183m";
     // Bold colors
     static final String BOLD_RED = "\u001B[1;31m";
-    static final String BOLD_GREEN = "\u001B[1;32m";
     static final String BOLD_YELLOW = "\u001B[1;33m";
-    static final String BOLD_BLUE = "\u001B[1;34m";
-    static final String BOLD_PURPLE = "\u001B[1;35m";
     static final String BOLD_WHITE = "\u001B[1;37m";
     static final String BOLD_ORANGE = "\u001B[1;38;5;208m";
     static final String BOLD_LIME = "\u001B[1;38;5;154m";
-    static final String BOLD_TEAL = "\u001B[1;38;5;27m";
     static final String BOLD_MAROON = "\u001B[1;38;5;88m";
-    static final String BOLD_LAVENDER = "\u001B[1;38;5;183m";
 }
 
 /**
@@ -177,8 +172,35 @@ public class Scheduler {
             String[] parts = message.split(" ");
             String droneId = parts[0];
             String state = parts[1];
-            int x = Integer.parseInt(parts[2]);
-            int y = Integer.parseInt(parts[3]);
+            
+            // Check for error in state field
+            boolean hasError = state.contains("ERROR");
+            boolean hasNozzleJam = state.contains("NOZZLE_JAM");
+            boolean hasMissionInfo = message.contains("TASK:");
+            
+            // Initialize location index based on whether there's task info
+            int locationStartIndex = 2;
+            int zoneId = -1;
+            String severity = null;
+            
+            // Parse task information if present
+            if (hasMissionInfo) {
+                for (int i = 0; i < parts.length; i++) {
+                    if (parts[i].startsWith("TASK:")) {
+                        String[] taskParts = parts[i].split(":");
+                        if (taskParts.length >= 3) {
+                            zoneId = Integer.parseInt(taskParts[1]);
+                            severity = taskParts[2];
+                            locationStartIndex = i + 1;
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Parse location
+            int x = Integer.parseInt(parts[locationStartIndex]);
+            int y = Integer.parseInt(parts[locationStartIndex + 1]);
             Location location = new Location(x, y);
 
             // Register drone if not already registered
@@ -193,12 +215,38 @@ public class Scheduler {
 
                 // Only update status in DroneManager (we always want to track latest status)
                 droneManager.updateDroneStatus(droneId, state, location, null);
+                
+                // Handle nozzle jam or communication failure - find a replacement drone
+                boolean hasCommunicationFailure = state.contains("COMMUNICATION_FAILURE");
+                if ((hasNozzleJam || hasCommunicationFailure) && hasMissionInfo && zoneId > 0) {
+                    String errorType = hasNozzleJam ? "nozzle jam" : "communication failure";
+                    System.out.println(SchedulerColors.BOLD_RED + "[SCHEDULER] Detected " + errorType + " on drone " + droneId + 
+                                     " during mission to Zone " + zoneId + " - finding replacement" + SchedulerColors.RESET);
+                    
+                    // Create a fire event for the replacement
+                    FireEvent replacementEvent = new FireEvent(
+                        String.format("%02d:%02d:%02d", java.time.LocalTime.now().getHour(), 
+                                       java.time.LocalTime.now().getMinute(), 
+                                       java.time.LocalTime.now().getSecond()),
+                        zoneId,
+                        "FIRE",
+                        severity,
+                        false
+                    );
+                    
+                    // Add to queue with high priority (at the front)
+                    LinkedList<FireEvent> tempQueue = new LinkedList<>(events);
+                    tempQueue.addFirst(replacementEvent);
+                    events = tempQueue;
+                    
+                    System.out.println(SchedulerColors.BOLD_YELLOW + "[SCHEDULER] Added replacement mission to Zone " + 
+                                     zoneId + " with " + severity + " severity to the front of queue" + SchedulerColors.RESET);
+                }
 
                 // Only print messages if something meaningful changed
                 if (stateChanged || locationChanged) {
                     System.out.println(SchedulerColors.TEAL + "[SCHEDULER] Updated drone status: " + SchedulerColors.BLUE + droneId +
                                       " at " + location + " in state " + state + SchedulerColors.RESET);
-
                 }
                 return; // Skip the duplicate log below if we're in the else branch
             }
@@ -220,15 +268,7 @@ public class Scheduler {
      * @param port which port the data should be sent to
      * @param what a description of what is being sent *ONLY USED FOR DATA LOGGING PURPOSES*
      * @param location where the data is being sent *ONLY USED FOR DATA LOGGING PURPOSES*
-     */
-    //TODO: will eventually have to add an IP address variable once multiple devices are being used
-    /**
-     * Sends a fire event to the specified port
      *
-     * @param fire The fire event to send
-     * @param port The port to send to
-     * @param what A description of what is being sent
-     * @param location A description of where it's being sent
      */
     public void send(FireEvent fire, int port, String what, String location) {
         String message = fire.toString();

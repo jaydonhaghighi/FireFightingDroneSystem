@@ -17,33 +17,9 @@ class FireSystemColors {
     // Regular colors
     static final String RED = "\u001B[31m";
     static final String GREEN = "\u001B[32m";
-    static final String YELLOW = "\u001B[33m";
-    static final String BLUE = "\u001B[34m";
     static final String PURPLE = "\u001B[35m";
     static final String CYAN = "\u001B[36m";
-    static final String WHITE = "\u001B[37m";
-    static final String BLACK = "\u001B[30m";
-    // Bold colors
-    static final String BOLD_RED = "\u001B[1;31m";
-    static final String BOLD_GREEN = "\u001B[1;32m";
-    static final String BOLD_YELLOW = "\u001B[1;33m";
-    static final String BOLD_BLUE = "\u001B[1;34m";
-    static final String BOLD_PURPLE = "\u001B[1;35m";
-    static final String BOLD_CYAN = "\u001B[1;36m";
-    static final String BOLD_WHITE = "\u001B[1;37m";
-    // Background colors
-    static final String BG_RED = "\u001B[41m";
-    static final String BG_GREEN = "\u001B[42m";
-    static final String BG_YELLOW = "\u001B[43m";
-    static final String BG_BLUE = "\u001B[44m";
-    static final String BG_PURPLE = "\u001B[45m";
-    static final String BG_CYAN = "\u001B[46m";
-    static final String BG_WHITE = "\u001B[47m";
-    // Text styling
-    static final String UNDERLINE = "\u001B[4m";
-    static final String BLINK = "\u001B[5m";
-    static final String BOLD = "\u001B[1m";
-    static final String ITALIC = "\u001B[3m";
+
 }
 
 /**
@@ -103,10 +79,8 @@ public class FireIncidentSubsystem {
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
 
-        System.out.println(FireSystemColors.GREEN + "CONFIRMED: " + r + FireSystemColors.RESET);
-
-        // Simulate message corruption with a 10% chance
-        if (Math.random() < 0.05) {  // 10% corruption probability
+        // Simulate message corruption with a 5% chance
+        if (Math.random() < 0.05) {
             int corruptIndex = (int) (Math.random() * r.length());
             char corruptChar = r.charAt(corruptIndex);
             String corruptedMessage = r.substring(0, corruptIndex) + (char) (corruptChar + 1) + r.substring(corruptIndex + 1);
@@ -114,7 +88,7 @@ public class FireIncidentSubsystem {
             System.out.println("[FIRE INCIDENT SUBSYSTEM] Message corrupted at byte " + corruptIndex);
         }
 
-        System.out.println(FireSystemColors.GREEN + "✓ CONFIRMED: " + r + FireSystemColors.RESET);
+        System.out.println(FireSystemColors.GREEN + "CONFIRMED: " + r + FireSystemColors.RESET);
 
     }
 

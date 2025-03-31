@@ -30,39 +30,16 @@ class ConsoleColors {
     static final String BLUE = "\u001B[34m";
     static final String PURPLE = "\u001B[35m";
     static final String CYAN = "\u001B[36m";
-    static final String WHITE = "\u001B[37m";
-    static final String BLACK = "\u001B[30m";
-    static final String ORANGE = "\u001B[38;5;208m";
-    static final String PINK = "\u001B[38;5;206m";
-    static final String LIME = "\u001B[38;5;154m";
     static final String TEAL = "\u001B[38;5;27m";
-    static final String GREY = "\u001B[38;5;240m";
-    static final String BROWN = "\u001B[38;5;130m";
-    static final String MAROON = "\u001B[38;5;88m";
-    static final String NAVY = "\u001B[38;5;18m";
-    static final String TURQUOISE = "\u001B[38;5;45m";
-    static final String MAGENTA = "\u001B[38;5;200m";
     static final String LAVENDER = "\u001B[38;5;183m";
     // Bold colors
     static final String BOLD_RED = "\u001B[1;31m";
     static final String BOLD_GREEN = "\u001B[1;32m";
     static final String BOLD_YELLOW = "\u001B[1;33m";
-    static final String BOLD_BLUE = "\u001B[1;34m";
     static final String BOLD_PURPLE = "\u001B[1;35m";
-    static final String BOLD_CYAN = "\u001B[1;36m";
     static final String BOLD_WHITE = "\u001B[1;37m";
-    static final String BOLD_BLACK = "\u001B[1;30m";
     static final String BOLD_ORANGE = "\u001B[1;38;5;208m";
-    static final String BOLD_PINK = "\u001B[1;38;5;206m";
     static final String BOLD_LIME = "\u001B[1;38;5;154m";
-    static final String BOLD_TEAL = "\u001B[1;38;5;27m";
-    static final String BOLD_GREY = "\u001B[1;38;5;240m";
-    static final String BOLD_BROWN = "\u001B[1;38;5;130m";
-    static final String BOLD_MAROON = "\u001B[1;38;5;88m";
-    static final String BOLD_NAVY = "\u001B[1;38;5;18m";
-    static final String BOLD_TURQUOISE = "\u001B[1;38;5;45m";
-    static final String BOLD_MAGENTA = "\u001B[1;38;5;200m";
-    static final String BOLD_LAVENDER = "\u001B[1;38;5;183m";
 }
 
 /**
@@ -144,9 +121,7 @@ class Idle implements DroneState {
     @Override
     public void dropAgent(DroneSubsystem context) {
 //        System.out.println("drone is idle, nothing to drop");
-
     }
-
 
     /**
      * Drone return status
@@ -262,9 +237,7 @@ class EnRoute implements DroneState {
 
     /**
      * Current state of drone
-     *
      * */
-
     @Override
     public void displayState() {
         System.out.println(ConsoleColors.BOLD_GREEN + "EN ROUTE" + ConsoleColors.RESET);
@@ -501,6 +474,7 @@ public class DroneSubsystem {
     private Location targetLocation; // target location for movement
     private Location baseLocation; // home base location
     private DroneSpecifications specifications; // specifications of drone
+    private FireEvent currentEvent; // current event being processed
 
     // map to track drops by zone ID
     private static final Map<Integer, Integer> zoneDropsMap = new ConcurrentHashMap<>();
@@ -598,9 +572,39 @@ public class DroneSubsystem {
         receivePacket = new DatagramPacket(data, data.length);
 
         // Simulate 10% packet loss
-        if (Math.random() < 0.1) {  // 10% chance of packet loss
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Packet lost!" + ConsoleColors.RESET);
-            return null;  // No packet to process
+        if (Math.random() < 0.05) {  // 5% chance of packet loss
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Packet lost!" + ConsoleColors.RESET);
+            
+            // Attempt to recover the packet
+            try {
+                System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Attempting to recover packet... waiting 2 seconds" + ConsoleColors.RESET);
+                Thread.sleep(2000);  // Pause for 2 seconds to simulate recovery attempt
+                
+                // 5% chance of failing to recover the packet
+                if (Math.random() < 0.05) {
+                    System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Failed to recover packet - aborting mission" + ConsoleColors.RESET);
+                    
+                    // Create a new error for communication failure
+                    setError(ErrorType.COMMUNICATION_FAILURE);
+                    
+                    // If there's a current mission, we need to notify the scheduler
+                    if (currentEvent != null) {
+                        sendStatusUpdate();  // This will include task info because of our earlier changes
+                    }
+                    
+                    // Force drone to return to base
+                    setTargetLocation(baseLocation);
+                    returningBack();
+                    
+                    return null;
+                }
+                
+                System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered packet" + ConsoleColors.RESET);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Recovery interrupted" + ConsoleColors.RESET);
+                return null;
+            }
         }
 
         try {
@@ -609,16 +613,16 @@ public class DroneSubsystem {
             System.out.println("receieve error: " + e);
         }
 
-        // Simulate 10% message corruption
-        if (Math.random() < 0.1) {  // 10% chance of corruption
+        // Simulate 5% message corruption
+        if (Math.random() < 0.05) {  // 5% chance of corruption
             int corruptIndex = (int) (Math.random() * data.length);
             data[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Message corrupted!" + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Message corrupted!" + ConsoleColors.RESET);
         }
 
         int len = receivePacket.getLength();
         String r = new String(data, 0, len);
-        System.out.println(ConsoleColors.PURPLE + "[" + droneId.toUpperCase() + "] Received packet: " + r + ConsoleColors.RESET);
+        System.out.println(ConsoleColors.TEAL + "[" + droneId.toUpperCase() + "] Received packet: " + ConsoleColors.BLUE + r + ConsoleColors.RESET);
         return createFireEventFromString(r);
     }
 
@@ -630,19 +634,49 @@ public class DroneSubsystem {
      * @param port The port to send to
      */
     public void send(String message, int port) {
-        // Simulate 10% packet loss
-        if (Math.random() < 0.1) {  // 10% chance of packet loss
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Packet lost, not sending!" + ConsoleColors.RESET);
-            return;  // Skip sending this message
+        // Simulate 5% packet loss
+        if (Math.random() < 0.05) {  // 5% chance of packet loss
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Packet lost during send!" + ConsoleColors.RESET);
+            
+            // Attempt to recover and resend
+            try {
+                System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Attempting to recover transmission... waiting 2 seconds" + ConsoleColors.RESET);
+                Thread.sleep(2000);  // Pause for 2 seconds to simulate recovery attempt
+                
+                // 5% chance of failing to recover the transmission
+                if (Math.random() < 0.05) {
+                    System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Failed to recover transmission - abort sending" + ConsoleColors.RESET);
+                    
+                    // If this is a status update to report a mission, we need to set an error
+                    if (message.contains("TASK:")) {
+                        setError(ErrorType.COMMUNICATION_FAILURE);
+                        
+                        // Force drone to return to base if not already returning
+                        if (!getCurrentStateName().equals("ArrivedToBase") && !getCurrentStateName().equals("Idle")) {
+                            System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Critical status update failed - returning to base" + ConsoleColors.RESET);
+                            setTargetLocation(baseLocation);
+                            returningBack();
+                        }
+                    }
+                    
+                    return;  // Skip sending this message
+                }
+                
+                System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered transmission" + ConsoleColors.RESET);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Recovery interrupted" + ConsoleColors.RESET);
+                return;
+            }
         }
 
         byte[] msg = message.getBytes();
 
-        // Simulate 10% message corruption
-        if (Math.random() < 0.1) {  // 10% chance of corruption
+        // Simulate 5% message corruption
+        if (Math.random() < 0.05) {  // 5% chance of corruption
             int corruptIndex = (int) (Math.random() * msg.length);
             msg[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Message corrupted!" + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "]Message corrupted!" + ConsoleColors.RESET);
         }
 
         sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
@@ -659,8 +693,21 @@ public class DroneSubsystem {
      */
     public void sendStatusUpdate() {
         String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
+        // Include task information if drone has a task and a hard fault
+        String taskInfo = "";
+        if (hasError() && (getCurrentError() == ErrorType.NOZZLE_JAM || getCurrentError() == ErrorType.COMMUNICATION_FAILURE)) {
+            // Check current task first
+            if (currentEvent != null) {
+                taskInfo = " TASK:" + currentEvent.getZoneID() + ":" + currentEvent.getSeverity();
+            } 
+            // Then check queue if no current task
+            else if (fireEventQueue.peek() != null) {
+                FireEvent event = fireEventQueue.peek();
+                taskInfo = " TASK:" + event.getZoneID() + ":" + event.getSeverity();
+            }
+        }
         String status = droneId + " " +
-                currentState.getClass().getSimpleName() + errorInfo + " " +
+                currentState.getClass().getSimpleName() + errorInfo + taskInfo + " " +
                 currentLocation.getX() + " " +
                 currentLocation.getY();
         send(status, 6001); // Send to scheduler
@@ -685,7 +732,7 @@ public class DroneSubsystem {
         // Check if the event has an error
         if(event.hasError()){
             setError(event.getError());
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Error detected in fire event: " +
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Error detected in fire event: " +
                     event.getError() + ConsoleColors.RESET);
         }
         currentState.handleFireEvent(this, event);
@@ -695,7 +742,6 @@ public class DroneSubsystem {
     /**
      * Drone dropping agent
      * */
-
     public void dropAgent() {
         System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
         currentState.displayState();
@@ -704,17 +750,15 @@ public class DroneSubsystem {
 
         currentState.dropAgent(this);
 
-        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
-
-
         //Check for drop agent timeout
         if (isDropAgentTimedOut()){
             setError(ErrorType.NOZZLE_JAM);
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] Nozzle jammed during agent drop - timeout exceeded" +
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Nozzle jammed during agent drop - timeout exceeded" +
                     ConsoleColors.RESET);
         }
-        System.out.println(ConsoleColors.BLUE + "[DRONE] State after: " + ConsoleColors.RESET);
-      
+        
+        // Display final state after potential error handling
+        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
         currentState.displayState();
 
         //Reset timer
@@ -767,12 +811,14 @@ public class DroneSubsystem {
      */
     public void setError(ErrorType errorType) {
         this.currentError = errorType;
-        System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] ERROR DETECTED: " +
+        System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] ERROR DETECTED: " +
                 errorType + ConsoleColors.RESET);
         //If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
         if(errorType == ErrorType.NOZZLE_JAM){
-            System.out.println(ConsoleColors.RED + "[DRONE " + droneId + "] HARD FAULT: Shutting down drone" +
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] HARD FAULT: Shutting down drone" +
                     ConsoleColors.RESET);
+            // Send status update with mission information to notify scheduler to find replacement
+            sendStatusUpdate();
             droneFaulted();
         }
     }
@@ -980,7 +1026,7 @@ public class DroneSubsystem {
             while (true) {
                 FireEvent event = drone.receive();
                 if (event == null) {
-                    System.out.println(ConsoleColors.RED + "[DRONE " + drone.getDroneId() + "] Event is null, skipping." + ConsoleColors.RESET);
+                    System.out.println(ConsoleColors.RED + "[" + drone.getDroneId() + "] Event is null, skipping." + ConsoleColors.RESET);
                     return;  // Skip processing this event
                 }
                 // Process events assigned to this drone (either as primary or as part of multi-drone response)
@@ -1027,28 +1073,25 @@ public class DroneSubsystem {
             String severity = event.getSeverity();
             String droneId = drone.getDroneId();
 
-            System.out.println(ConsoleColors.BOLD_GREEN + "\n[" + droneId.toUpperCase() + "] Mission start to Zone " + zoneId + ConsoleColors.RESET);
-            
             //Check for injected errors from the event
             if(event.hasError()){
-                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Error injected from input: " +
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Error injected from input: " +
                         event.getError() + ConsoleColors.RESET);
                 drone.setError(event.getError());
 
                 //if it's a hard fault like nozzle/bay door fault, we abort mission!
                 if (event.getError() == ErrorType.NOZZLE_JAM) {
-                    System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Hard fault detected, aborting mission" +
+                    System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Hard fault detected, aborting mission" +
                             ConsoleColors.RESET);
+                    // Send status update with task information to notify scheduler to find replacement
+                    drone.sendStatusUpdate();
                     return;
                 }
             }
 
-            // ──────────────── MISSION START ─────────────────
-            System.out.println(ConsoleColors.YELLOW + "\nDRONE " + droneId + ": Mission start to Zone " + zoneId +
-                    " - " + severity + " fire" + ConsoleColors.RESET);
-
-            // Update drone target location and schedule event
+            // Update drone target location and store current event
             drone.setTargetLocation(zoneLocation);
+            drone.currentEvent = event;
             drone.scheduleFireEvent(event);
             Thread.sleep(1000); // Preparation delay
 
@@ -1057,7 +1100,7 @@ public class DroneSubsystem {
 
             //Check if movement failed
             if(drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK){
-                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Movement fault detected, cannot reach zone" +
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Movement fault detected, cannot reach zone" +
                         ConsoleColors.RESET);
                 drone.droneFaulted();
                 return;
@@ -1074,16 +1117,15 @@ public class DroneSubsystem {
 
             // Check if nozzle/bay door fault occurred
             if (drone.hasError() && (drone.getCurrentError() == ErrorType.NOZZLE_JAM)){
-                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Nozzle/bay door fault detected, cannot drop agent" +
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Nozzle/bay door fault detected, cannot drop agent" +
                         ConsoleColors.RESET);
+                // Send status update with task information to notify scheduler to find replacement
+                drone.sendStatusUpdate();
                 drone.droneFaulted();
                 return;
             }
 
-
-            System.out.println(ConsoleColors.RED + " DRONE " + droneId + ": Fighting fire in Zone " + zoneId +
-                    " (" + (firefightingDuration/1000) + "s, flow rate: " +
-                    drone.getSpecifications().getFlowRate() + " L/s)" + ConsoleColors.RESET);
+            // Simulate water tank emptying
             Thread.sleep(firefightingDuration);
 
             // Determine if fire is fully extinguished or if drone has contributed its capacity
@@ -1125,7 +1167,7 @@ public class DroneSubsystem {
 
             // Check if movement failed during return
             if (drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK) {
-                System.out.println(ConsoleColors.RED + "DRONE " + droneId + ": Movement fault detected during return, cannot reach base" +
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Movement fault detected during return, cannot reach base" +
                         ConsoleColors.RESET);
                 drone.droneFaulted();
                 return;
@@ -1137,11 +1179,13 @@ public class DroneSubsystem {
 
             // Clear any non-hard faults when returning to base
             if (drone.hasError() && drone.getCurrentError() != ErrorType.NOZZLE_JAM) {
-                System.out.println(ConsoleColors.GREEN + "DRONE " + droneId + ": Non-hard fault cleared during maintenance" +
+                System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Non-hard fault cleared during maintenance" +
                         ConsoleColors.RESET);
                 drone.clearError();
             }
-
+            
+            // Clear current event when mission is done
+            drone.currentEvent = null;
             drone.taskCompleted();
 
             System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Mission complete, ready for next assignment\n" +

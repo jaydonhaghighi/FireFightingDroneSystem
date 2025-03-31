@@ -23,7 +23,7 @@ public class FireEvent {
     public ErrorType error;
 
     public enum ErrorType {
-        DRONE_STUCK, NOZZLE_JAM, DOOR_STUCK, ARRIVAL_SENSOR_FAILED, NONE
+        DRONE_STUCK, NOZZLE_JAM, DOOR_STUCK, ARRIVAL_SENSOR_FAILED, COMMUNICATION_FAILURE, NONE
     }
 
     /**
@@ -219,6 +219,9 @@ public class FireEvent {
             case "ARRIVAL_SENSOR_FAILED":
                 this.error = ErrorType.ARRIVAL_SENSOR_FAILED;
                 break;
+            case "COMMUNICATION_FAILURE":
+                this.error = ErrorType.COMMUNICATION_FAILURE;
+                break;
             default:
                 this.error = ErrorType.NONE;
                 break;
@@ -270,6 +273,7 @@ public class FireEvent {
         return str.contains("NOZZLE_JAM") ||
                 str.contains("DOOR_STUCK") ||
                 str.contains("DRONE_STUCK") ||
-                str.contains("ARRIVAL_SENSOR");
+                str.contains("ARRIVAL_SENSOR") ||
+                str.contains("COMMUNICATION_FAILURE");
     }
 }
