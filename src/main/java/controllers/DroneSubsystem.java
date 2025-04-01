@@ -571,33 +571,14 @@ public class DroneSubsystem {
         byte[] data = new byte[100];
         receivePacket = new DatagramPacket(data, data.length);
 
-        // Simulate 10% packet loss
+        // Simulate 5% packet loss
         if (Math.random() < 0.05) {  // 5% chance of packet loss
             System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Packet lost!" + ConsoleColors.RESET);
             
-            // Attempt to recover the packet
+            // Always successfully recover the packet after a 2-second delay
             try {
                 System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Attempting to recover packet... waiting 2 seconds" + ConsoleColors.RESET);
                 Thread.sleep(2000);  // Pause for 2 seconds to simulate recovery attempt
-                
-                // 5% chance of failing to recover the packet
-                if (Math.random() < 0.05) {
-                    System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Failed to recover packet - aborting mission" + ConsoleColors.RESET);
-                    
-                    // Create a new error for communication failure
-                    setError(ErrorType.COMMUNICATION_FAILURE);
-                    
-                    // If there's a current mission, we need to notify the scheduler
-                    if (currentEvent != null) {
-                        sendStatusUpdate();  // This will include task info because of our earlier changes
-                    }
-                    
-                    // Force drone to return to base
-                    setTargetLocation(baseLocation);
-                    returningBack();
-                    
-                    return null;
-                }
                 
                 System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered packet" + ConsoleColors.RESET);
             } catch (InterruptedException e) {
@@ -618,6 +599,26 @@ public class DroneSubsystem {
             int corruptIndex = (int) (Math.random() * data.length);
             data[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
             System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Message corrupted!" + ConsoleColors.RESET);
+            
+            // Always successfully recover from corruption after a 2-second delay
+            try {
+                System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Attempting to recover from corruption... waiting 2 seconds" + ConsoleColors.RESET);
+                Thread.sleep(2000);  // Pause for 2 seconds to simulate recovery attempt
+                
+                // Re-receive the packet after corruption is detected
+                System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered from corruption" + ConsoleColors.RESET);
+                try {
+                    // Create a new packet to receive the re-sent data
+                    data = new byte[100];
+                    receivePacket = new DatagramPacket(data, data.length);
+                    receieveSocket.receive(receivePacket);
+                } catch (IOException e) {
+                    System.out.println("Corruption recovery error: " + e);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Corruption recovery interrupted" + ConsoleColors.RESET);
+            }
         }
 
         int len = receivePacket.getLength();
@@ -638,29 +639,10 @@ public class DroneSubsystem {
         if (Math.random() < 0.05) {  // 5% chance of packet loss
             System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Packet lost during send!" + ConsoleColors.RESET);
             
-            // Attempt to recover and resend
+            // Always successfully recover the transmission after a 2-second delay
             try {
                 System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Attempting to recover transmission... waiting 2 seconds" + ConsoleColors.RESET);
                 Thread.sleep(2000);  // Pause for 2 seconds to simulate recovery attempt
-                
-                // 5% chance of failing to recover the transmission
-                if (Math.random() < 0.05) {
-                    System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Failed to recover transmission - abort sending" + ConsoleColors.RESET);
-                    
-                    // If this is a status update to report a mission, we need to set an error
-                    if (message.contains("TASK:")) {
-                        setError(ErrorType.COMMUNICATION_FAILURE);
-                        
-                        // Force drone to return to base if not already returning
-                        if (!getCurrentStateName().equals("ArrivedToBase") && !getCurrentStateName().equals("Idle")) {
-                            System.out.println(ConsoleColors.BOLD_RED + "[" + droneId.toUpperCase() + "] Critical status update failed - returning to base" + ConsoleColors.RESET);
-                            setTargetLocation(baseLocation);
-                            returningBack();
-                        }
-                    }
-                    
-                    return;  // Skip sending this message
-                }
                 
                 System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered transmission" + ConsoleColors.RESET);
             } catch (InterruptedException e) {
@@ -677,6 +659,19 @@ public class DroneSubsystem {
             int corruptIndex = (int) (Math.random() * msg.length);
             msg[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
             System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Message corrupted!" + ConsoleColors.RESET);
+            
+            // Always successfully recover from corruption after a 2-second delay
+            try {
+                System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Attempting to recover from corruption... waiting 2 seconds" + ConsoleColors.RESET);
+                Thread.sleep(2000);  // Pause for 2 seconds to simulate recovery attempt
+                
+                // Restore the original message after corruption recovery
+                msg = message.getBytes();  // Get a fresh copy of the bytes
+                System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered from corruption" + ConsoleColors.RESET);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Corruption recovery interrupted" + ConsoleColors.RESET);
+            }
         }
 
         sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
@@ -726,7 +721,7 @@ public class DroneSubsystem {
      * @param event FireEvent the fire event to handle
      * */
     public void handleFireEvent(FireEvent event) {
-        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n["+ droneId.toUpperCase() + "] State before: " + ConsoleColors.RESET);
         currentState.displayState();
 
         // Check if the event has an error
@@ -735,25 +730,39 @@ public class DroneSubsystem {
             // Error message is already printed in setError method
         }
         currentState.handleFireEvent(this, event);
-        System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "["+ droneId.toUpperCase() + "] State after: " + ConsoleColors.RESET);
         currentState.displayState();
     }
     /**
      * Drone dropping agent
      * */
     public void dropAgent() {
-        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n["+ droneId.toUpperCase() + "] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         //Start drop agent timer
         startDropAgentTimer();
 
         currentState.dropAgent(this);
 
-        //Check for drop agent timeout
-        if (isDropAgentTimedOut()){
+        //Check for drop agent timeout - simulate nozzle jam with 5% probability
+        if (isDropAgentTimedOut() && Math.random() < 0.05) {
+            // This is a hard fault and will be handled by the setError method
             setError(ErrorType.NOZZLE_JAM);
             System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Nozzle jammed during agent drop - timeout exceeded" +
                     ConsoleColors.RESET);
+        }
+        // For all other errors during the drop, simulate a soft fault (e.g., momentary pressure drop)
+        else if (isDropAgentTimedOut()) {
+            // Simulate a soft fault that can be recovered from
+            System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Minor drop system fault detected - attempting recovery..." +
+                    ConsoleColors.RESET);
+            try {
+                Thread.sleep(2000);  // 2-second recovery delay
+                System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered from minor drop system fault" +
+                        ConsoleColors.RESET);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         
         // Display final state after potential error handling
@@ -768,7 +777,7 @@ public class DroneSubsystem {
      * Drone returning to base
      * */
     public void returningBack() {
-        System.out.print(ConsoleColors.BOLD_WHITE + "\n[DRONE] State before: " + ConsoleColors.RESET);
+        System.out.print(ConsoleColors.BOLD_WHITE + "\n["+ droneId.toUpperCase() + "] State before: " + ConsoleColors.RESET);
         currentState.displayState();
         currentState.returningBack(this);
         System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
@@ -815,14 +824,34 @@ public class DroneSubsystem {
             System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] ERROR DETECTED: " +
                     errorType + ConsoleColors.RESET);
             
-            // If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
+            // Handle different error types
             if (errorType == ErrorType.NOZZLE_JAM) {
+                // Handle NOZZLE_JAM as a hard fault
                 System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] HARD FAULT: Shutting down drone" +
                         ConsoleColors.RESET);
                 // Set to faulted state first so status update shows faulted state
                 droneFaulted();
                 // Send status update with mission information to notify scheduler to find replacement
                 sendStatusUpdate();
+            } else if (errorType == ErrorType.COMMUNICATION_FAILURE || errorType == ErrorType.DRONE_STUCK || 
+                     errorType == ErrorType.DOOR_STUCK || errorType == ErrorType.ARRIVAL_SENSOR_FAILED) {
+                // Handle soft faults with recovery
+                try {
+                    System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] SOFT FAULT: Attempting recovery... waiting 2 seconds" +
+                            ConsoleColors.RESET);
+                    Thread.sleep(2000);  // Pause for 2 seconds to recover
+                    
+                    // Clear the error after recovery delay
+                    System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Successfully recovered from " + errorType +
+                            ConsoleColors.RESET);
+                    this.currentError = ErrorType.NONE;
+                    
+                    // Send status update to notify about recovery
+                    sendStatusUpdate();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Fault recovery interrupted" + ConsoleColors.RESET);
+                }
             }
         }
     }
@@ -1079,10 +1108,10 @@ public class DroneSubsystem {
 
             //Check for injected errors from the event
             if(event.hasError()){
-                // Set the error first - this will log the error detection
+                // Set the error first - this will log the error detection and handle recovery for soft faults
                 drone.setError(event.getError());
 
-                //if it's a hard fault like nozzle/bay door fault, we abort mission!
+                //if it's a hard fault like nozzle/bay door fault, abort mission!
                 if (event.getError() == ErrorType.NOZZLE_JAM) {
                     System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Hard fault detected, aborting mission" +
                             ConsoleColors.RESET);
@@ -1091,6 +1120,12 @@ public class DroneSubsystem {
                     // Send status update with task information to notify scheduler to find replacement
                     drone.sendStatusUpdate();
                     return;
+                }
+                // For soft faults, we can continue after recovery (handled in setError)
+                else {
+                    System.out.println(ConsoleColors.GREEN + "[" + droneId.toUpperCase() + "] Soft fault recovered, continuing mission" +
+                            ConsoleColors.RESET);
+                    // No return here, continue with the mission after soft fault recovery
                 }
             }
 
@@ -1103,12 +1138,13 @@ public class DroneSubsystem {
             // Fly to zone
             simulateMovement(drone, zoneLocation);
 
-            //Check if movement failed
+            //Check if movement failed - already handled in setError method now
             if(drone.hasError() && drone.getCurrentError() == ErrorType.DRONE_STUCK){
-                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Movement fault detected, cannot reach zone" +
+                // We don't need to do anything special here anymore since setError handles recovery
+                // The 2-second delay is already applied in the setError method
+                System.out.println(ConsoleColors.YELLOW + "[" + droneId.toUpperCase() + "] Movement fault detected, but will recover automatically" +
                         ConsoleColors.RESET);
-                drone.droneFaulted();
-                return;
+                // Don't return - continue with the mission after recovery
             }
 
             // Calculate firefighting duration based on severity and drone specifications
