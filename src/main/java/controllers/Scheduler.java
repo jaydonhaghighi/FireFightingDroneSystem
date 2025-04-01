@@ -147,6 +147,7 @@ public class Scheduler {
      */
     private boolean isDroneStatusUpdate(String message) {
         // Expect format: droneId state [ERROR:errorType] [TASK:zoneId:severity] x y
+        // Or format: droneId state [ERROR:errorType] [FIRE_OUT:zoneId] x y
         try {
             String[] parts = message.split(" ");
             if (parts.length >= 3) {
@@ -198,6 +199,7 @@ public class Scheduler {
             // Parse task information if present
             int zoneId = -1;
             String severity = null;
+            boolean isFireOut = false;
             
             if (hasMissionInfo) {
                 for (int i = 0; i < parts.length; i++) {
@@ -209,6 +211,20 @@ public class Scheduler {
                         }
                         break;
                     }
+                }
+            }
+            
+            // Check for fire extinguished messages
+            for (int i = 0; i < parts.length; i++) {
+                if (parts[i].startsWith("FIRE_OUT:")) {
+                    String[] fireOutParts = parts[i].split(":");
+                    if (fireOutParts.length >= 2) {
+                        zoneId = Integer.parseInt(fireOutParts[1]);
+                        isFireOut = true;
+                        System.out.println(SchedulerColors.BOLD_LIME + "[SCHEDULER] Received fire extinguished notification for Zone " + 
+                                         zoneId + " from " + droneId + SchedulerColors.RESET);
+                    }
+                    break;
                 }
             }
 
@@ -224,6 +240,18 @@ public class Scheduler {
 
                 // Only update status in DroneManager (we always want to track latest status)
                 droneManager.updateDroneStatus(droneId, state, location, null);
+                
+                // Handle fire extinguished message - mark the zone as no longer having a fire
+                if (isFireOut && zoneId > 0) {
+                    System.out.println(SchedulerColors.BOLD_LIME + "🔥✓ [SCHEDULER] Fire in Zone " + zoneId + 
+                        " has been EXTINGUISHED by " + droneId + SchedulerColors.RESET);
+                    
+                    // Update zone to mark fire as extinguished
+                    droneManager.updateZoneFireStatus(zoneId, false, "NONE");
+                    
+                    // Refresh visualization to show updated fire status
+                    visualizeZonesAndDrones();
+                }
                 
                 // Handle nozzle jam or communication failure - find a replacement drone
                 boolean hasCommunicationFailure = state.contains("COMMUNICATION_FAILURE");

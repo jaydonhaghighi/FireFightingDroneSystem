@@ -707,6 +707,24 @@ public class DroneSubsystem {
                 currentLocation.getY();
         send(status, 6001); // Send to scheduler
     }
+    
+    /**
+     * Sends a status update to the scheduler that includes fire extinguished information
+     * @param zoneId The zone ID where fire was extinguished
+     */
+    public void sendFireExtinguishedStatus(int zoneId) {
+        // Always include error info if there is an error
+        String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
+        
+        // Include the fire extinguished marker
+        String fireOutInfo = " FIRE_OUT:" + zoneId;
+        
+        String status = droneId + " " +
+                currentState.getClass().getSimpleName() + errorInfo + fireOutInfo + " " +
+                currentLocation.getX() + " " +
+                currentLocation.getY();
+        send(status, 6001); // Send to scheduler
+    }
 
     /**
      * Returns the number of fire events currently queued
@@ -1174,14 +1192,18 @@ public class DroneSubsystem {
             int dronesNeeded = getRequiredDronesForSeverity(severity);
             boolean fullCapacityUsed = true; // Assume drone used full capacity
 
-            // Increment the drops counter for this zone
+            // Increment the drops counter for this zone - using static method for backward compatibility
             int dropCount = recordDropForZone(zoneId);
-
-            if (dropCount >= dronesNeeded) {
+            
+            boolean isExtinguished = (dropCount >= dronesNeeded);
+            if (isExtinguished) {
                 // If enough drones were dispatched, fire would be fully extinguished
                 System.out.println(ConsoleColors.BOLD_LIME + "[" + droneId.toUpperCase() + "] Fire extinguished in Zone " + zoneId +
                                " (Drops: " + dropCount + "/" + dronesNeeded + ")" +
                                ConsoleColors.RESET);
+                
+                // Update status to include the fire extinguished flag
+                drone.sendFireExtinguishedStatus(zoneId);
             } else {
                 // Show progress with drops count
                 System.out.println(ConsoleColors.BOLD_YELLOW + "[" + droneId.toUpperCase() + "] Fire partially contained in Zone " + zoneId +

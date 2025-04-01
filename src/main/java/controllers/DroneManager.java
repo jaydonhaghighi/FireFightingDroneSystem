@@ -15,6 +15,7 @@ public class DroneManager {
     private Map<String, DroneStatus> drones;
     private Map<Integer, Zone> zones;
     private Location baseLocation;
+    private Map<Integer, Integer> zoneDropCounts; // Tracks the number of drops completed for each zone
     
     /**
      * Creates a new drone manager with the specified base location
@@ -25,6 +26,7 @@ public class DroneManager {
         this.drones = new HashMap<>();
         this.zones = new HashMap<>();
         this.baseLocation = baseLocation;
+        this.zoneDropCounts = new HashMap<>();
         initializeZones();
     }
     
@@ -168,7 +170,50 @@ public class DroneManager {
         if (zone != null) {
             zone.setHasFire(hasFire);
             zone.setSeverity(severity);
+            
+            // If a new fire is started, reset the drop count
+            if (hasFire) {
+                zoneDropCounts.put(zoneId, 0);
+            } else {
+                // If fire is being marked as extinguished, remove the drop count
+                zoneDropCounts.remove(zoneId);
+            }
         }
+    }
+    
+    /**
+     * Records a fire agent drop for a zone and returns the new total
+     * 
+     * @param zoneId the zone identifier
+     * @return the total drops for this zone after incrementing
+     */
+    public int recordDropForZone(int zoneId) {
+        int currentDrops = zoneDropCounts.getOrDefault(zoneId, 0);
+        int newTotal = currentDrops + 1;
+        zoneDropCounts.put(zoneId, newTotal);
+        return newTotal;
+    }
+    
+    /**
+     * Gets the current drop count for a zone
+     * 
+     * @param zoneId the zone identifier
+     * @return the number of drops recorded for this zone
+     */
+    public int getDropCountForZone(int zoneId) {
+        return zoneDropCounts.getOrDefault(zoneId, 0);
+    }
+    
+    /**
+     * Checks if a zone has received enough drops to extinguish its fire
+     * 
+     * @param zoneId the zone identifier
+     * @param requiredDrops the number of drops required to extinguish the fire
+     * @return true if the fire should be considered extinguished
+     */
+    public boolean isFireExtinguished(int zoneId, int requiredDrops) {
+        int currentDrops = getDropCountForZone(zoneId);
+        return currentDrops >= requiredDrops;
     }
     
     /**
