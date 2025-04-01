@@ -1161,8 +1161,8 @@ public class DroneSubsystem {
             distance + " meters, " + String.format("%.1f", travelTimeMs/1000.0) + "s, " + 
             speedStatus + ", max speed: " + maxSpeed + " km/h)" + ConsoleColors.RESET);
         
-        // Determine number of updates (fewer updates for cleaner output)
-        int steps = Math.min(3, distance / 10); // max 3 steps for any distance
+        // Determine number of updates for smoother visualization
+        int steps = Math.max(10, distance / 50); // Increase position updates for smoother paths
         if (steps == 0) steps = 1; // at least 1 step
         int stepDelayMs = travelTimeMs / steps;
 

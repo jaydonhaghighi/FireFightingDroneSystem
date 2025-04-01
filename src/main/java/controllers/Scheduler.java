@@ -269,8 +269,8 @@ public class Scheduler {
         
         // Handle fire extinguished notification
         if (taskInfo.isFireOut && taskInfo.zoneId > 0) {
-            System.out.println(SchedulerColors.BOLD_LIME + "🔥✓ [SCHEDULER] Fire in Zone " + taskInfo.zoneId + 
-                              " has been EXTINGUISHED by " + droneId + SchedulerColors.RESET);
+//            System.out.println(SchedulerColors.BOLD_LIME + "[SCHEDULER] Fire in Zone " + taskInfo.zoneId +
+//                              " has been EXTINGUISHED by " + droneId + SchedulerColors.RESET);
             
             // Update zone to mark fire as extinguished
             droneManager.updateZoneFireStatus(taskInfo.zoneId, false, "NONE");
@@ -537,22 +537,11 @@ public class Scheduler {
             }
         }
 
-        // Show active drones - only those on missions
+        // Count active drones but don't list them individually
         List<DroneStatus> activeDrones = drones.stream()
                 .filter(d -> !d.isAvailable())
                 .sorted(Comparator.comparing(DroneStatus::getDroneId))
                 .toList();
-
-        if (!activeDrones.isEmpty()) {
-            for (DroneStatus drone : activeDrones) {
-                if (drone.getCurrentTask() != null) {
-                    System.out.println(SchedulerColors.BLUE + "    " + drone.getDroneId() + ": " +
-                            drone.getCurrentLocation() + " to Zone " +
-                            drone.getCurrentTask().getZoneID() +
-                            SchedulerColors.RESET);
-                }
-            }
-        }
 
         // Show available drones - simple count
         long availableCount = drones.stream().filter(DroneStatus::isAvailable).count();
@@ -625,8 +614,8 @@ public class Scheduler {
                     }
                 }
 
-                // Brief pause to prevent tight loop
-                Thread.sleep(100);
+                // Brief pause to prevent tight loop - smaller delay for more responsive UI
+                Thread.sleep(50);
             }
         } catch (Exception e) {
             System.out.println("Error in receive thread: " + e);
