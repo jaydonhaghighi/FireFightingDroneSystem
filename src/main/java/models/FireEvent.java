@@ -181,18 +181,21 @@ public class FireEvent {
             int zoneID = Integer.parseInt(parts[1]);
             String eventType = parts[2];
             String severity = parts[3];
-
-            FireEvent event = new FireEvent(time, zoneID, eventType, severity, "NONE");
-
-            // Check if a drone ID is included
-            if (parts.length > 4 && !isErrorType(parts[4])) {
-                event.assignDrone(parts[4]);
+            
+            // Check if the last part is an error type (could be at position 4 or 5)
+            String errorType = "NONE";
+            if (parts.length > 4) {
+                String lastPart = parts[parts.length - 1];
+                if (isErrorType(lastPart)) {
+                    errorType = lastPart;
+                }
             }
 
-            // Check if an error type is included
-            if (parts.length > 5) {
-                // Parse error type
-                event.setErrorFromString(parts[5]);
+            FireEvent event = new FireEvent(time, zoneID, eventType, severity, errorType);
+
+            // Check if a drone ID is included (but not if it's the error type)
+            if (parts.length > 4 && !isErrorType(parts[4])) {
+                event.assignDrone(parts[4]);
             }
 
             return event;

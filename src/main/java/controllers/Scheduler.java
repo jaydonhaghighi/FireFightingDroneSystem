@@ -136,23 +136,28 @@ public class Scheduler {
      * @return true if it's a status update, false otherwise
      */
     private boolean isDroneStatusUpdate(String message) {
-        // Expect format: droneId state x y
+        // Expect format: droneId state [ERROR:errorType] [TASK:zoneId:severity] x y
         try {
             String[] parts = message.split(" ");
-            if (parts.length >= 4) {
+            if (parts.length >= 3) {
                 String droneId = parts[0];
-                // Check if it starts with "drone" and if the next part is not a time format (to differentiate from fire events)
+                // Check if it starts with "drone" to identify drone messages
                 if (droneId.startsWith("drone")) {
-                    // Try to parse the 3rd and 4th parts as integers (x and y coordinates)
-                    Integer.parseInt(parts[2]);
-                    Integer.parseInt(parts[3]);
+                    // Find the x and y coordinates by working backwards from the end of the message
+                    int lastIndex = parts.length - 1;
+                    int secondLastIndex = parts.length - 2;
+                    
+                    // Try to parse the last two elements as integers (x and y coordinates)
+                    Integer.parseInt(parts[secondLastIndex]);
+                    Integer.parseInt(parts[lastIndex]);
+                    
                     System.out.println(SchedulerColors.TEAL + "[SCHEDULER] Received status update from: " + SchedulerColors.BLUE + droneId + SchedulerColors.RESET);
                     return true;
                 }
             }
         } catch (Exception e) {
             // If we can't parse the message as a drone status, it's not a drone status
-            System.out.println(SchedulerColors.YELLOW + "[SCHEDULER] Message not recognized as drone status: " + message + SchedulerColors.RESET);
+            System.out.println(SchedulerColors.YELLOW + "[SCHEDULER] Message not recognized as drone status: " + message + " (" + e.getMessage() + ")" + SchedulerColors.RESET);
         }
         return false;
     }
@@ -167,17 +172,23 @@ public class Scheduler {
             String droneId = parts[0];
             String state = parts[1];
             
-            // Check for error in state field
-            boolean hasError = state.contains("ERROR");
-            boolean hasNozzleJam = state.contains("NOZZLE_JAM");
+            // Check for errors and task info in the message
+            boolean hasError = message.contains("ERROR:");
+            boolean hasNozzleJam = message.contains("NOZZLE_JAM");
             boolean hasMissionInfo = message.contains("TASK:");
             
-            // Initialize location index based on whether there's task info
-            int locationStartIndex = 2;
+            // Find the last two elements which should be x and y coordinates
+            int lastIndex = parts.length - 1;
+            int secondLastIndex = parts.length - 2;
+            
+            int x = Integer.parseInt(parts[secondLastIndex]);
+            int y = Integer.parseInt(parts[lastIndex]);
+            Location location = new Location(x, y);
+            
+            // Parse task information if present
             int zoneId = -1;
             String severity = null;
             
-            // Parse task information if present
             if (hasMissionInfo) {
                 for (int i = 0; i < parts.length; i++) {
                     if (parts[i].startsWith("TASK:")) {
@@ -185,17 +196,11 @@ public class Scheduler {
                         if (taskParts.length >= 3) {
                             zoneId = Integer.parseInt(taskParts[1]);
                             severity = taskParts[2];
-                            locationStartIndex = i + 1;
                         }
                         break;
                     }
                 }
             }
-            
-            // Parse location
-            int x = Integer.parseInt(parts[locationStartIndex]);
-            int y = Integer.parseInt(parts[locationStartIndex + 1]);
-            Location location = new Location(x, y);
 
             // Register drone if not already registered
             DroneStatus status = droneManager.getDroneStatus(droneId);
@@ -339,6 +344,12 @@ public class Scheduler {
                                  zoneId + " at " + zoneLocation + " (requires " + dronesNeeded + " drones)" + 
                                  SchedulerColors.RESET);
                 
+                // Check if the event has a NOZZLE_JAM error type
+                if (event.hasError() && event.getError() == FireEvent.ErrorType.NOZZLE_JAM) {
+                    System.out.println(SchedulerColors.BOLD_RED + "[SCHEDULER] Detected NOZZLE_JAM in fire event for Zone " + 
+                                     zoneId + " - will assign to another drone" + SchedulerColors.RESET);
+                }
+                
                 // Brief assessment delay
                 Thread.sleep(1000);
 
@@ -358,6 +369,42 @@ public class Scheduler {
                         String droneId = drone.getDroneId();
                         int distance = drone.distanceTo(zoneLocation);
                         int previousMissions = drone.getZonesServiced();
+
+                        // If the event has a NOZZLE_JAM error, mark the drone as unavailable and find a replacement
+                        if (event.hasError() && event.getError() == FireEvent.ErrorType.NOZZLE_JAM) {
+                            System.out.println(SchedulerColors.BOLD_RED + "[SCHEDULER] Drone " + droneId + 
+                                             " will be marked unavailable due to NOZZLE_JAM and a replacement will be found" + 
+                                             SchedulerColors.RESET);
+                            
+                            // Mark drone as unavailable by setting error type to NOZZLE_JAM
+                            droneManager.updateDroneStatus(droneId, "Fault", drone.getCurrentLocation(), null);
+                            DroneStatus status = droneManager.getDroneStatus(droneId);
+                            if (status != null) {
+                                status.setErrorType(FireEvent.ErrorType.NOZZLE_JAM);
+                            }
+                            
+                            // Create a replacement event without the error
+                            FireEvent replacementEvent = new FireEvent(
+                                String.format("%02d:%02d:%02d", java.time.LocalTime.now().getHour(), 
+                                              java.time.LocalTime.now().getMinute(), 
+                                              java.time.LocalTime.now().getSecond()),
+                                zoneId,
+                                "FIRE",
+                                severity,
+                                "NONE"
+                            );
+                            
+                            // Add replacement event to front of queue
+                            LinkedList<FireEvent> tempQueue = new LinkedList<>(events);
+                            tempQueue.set(0, replacementEvent); // Replace the current event with error with the replacement
+                            events = tempQueue;
+                            
+                            System.out.println(SchedulerColors.BOLD_YELLOW + "[SCHEDULER] Created replacement event for Zone " + 
+                                             zoneId + " without error" + SchedulerColors.RESET);
+                            
+                            // Exit this loop to restart with the new event
+                            return;
+                        }
 
                         // Mission assignment - includes drone count information
                         System.out.println(SchedulerColors.GREEN + "[ASSIGNED] " + droneId.toUpperCase() +

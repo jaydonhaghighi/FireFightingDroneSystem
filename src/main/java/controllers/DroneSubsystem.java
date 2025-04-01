@@ -676,7 +676,7 @@ public class DroneSubsystem {
         if (Math.random() < 0.05) {  // 5% chance of corruption
             int corruptIndex = (int) (Math.random() * msg.length);
             msg[corruptIndex] = (byte) (Math.random() * 256);  // Randomly change a byte
-            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "]Message corrupted!" + ConsoleColors.RESET);
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Message corrupted!" + ConsoleColors.RESET);
         }
 
         sendPacket = new DatagramPacket(msg, msg.length, serverIP, port);
@@ -692,20 +692,20 @@ public class DroneSubsystem {
      * Sends a status update to the scheduler
      */
     public void sendStatusUpdate() {
+        // Always include error info if there is an error
         String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
-        // Include task information if drone has a task and a hard fault
+        
+        // Include task information if drone has a task, especially important for hard faults
         String taskInfo = "";
-        if (hasError() && (getCurrentError() == ErrorType.NOZZLE_JAM || getCurrentError() == ErrorType.COMMUNICATION_FAILURE)) {
-            // Check current task first
-            if (currentEvent != null) {
-                taskInfo = " TASK:" + currentEvent.getZoneID() + ":" + currentEvent.getSeverity();
-            } 
-            // Then check queue if no current task
-            else if (fireEventQueue.peek() != null) {
-                FireEvent event = fireEventQueue.peek();
-                taskInfo = " TASK:" + event.getZoneID() + ":" + event.getSeverity();
-            }
+        if (currentEvent != null) {
+            taskInfo = " TASK:" + currentEvent.getZoneID() + ":" + currentEvent.getSeverity();
+        } 
+        // Then check queue if no current task
+        else if (fireEventQueue.peek() != null) {
+            FireEvent event = fireEventQueue.peek();
+            taskInfo = " TASK:" + event.getZoneID() + ":" + event.getSeverity();
         }
+        
         String status = droneId + " " +
                 currentState.getClass().getSimpleName() + errorInfo + taskInfo + " " +
                 currentLocation.getX() + " " +
@@ -732,8 +732,7 @@ public class DroneSubsystem {
         // Check if the event has an error
         if(event.hasError()){
             setError(event.getError());
-            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Error detected in fire event: " +
-                    event.getError() + ConsoleColors.RESET);
+            // Error message is already printed in setError method
         }
         currentState.handleFireEvent(this, event);
         System.out.print(ConsoleColors.BOLD_WHITE + "[DRONE] State after: " + ConsoleColors.RESET);
@@ -810,16 +809,21 @@ public class DroneSubsystem {
      * @param errorType The type of error
      */
     public void setError(ErrorType errorType) {
-        this.currentError = errorType;
-        System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] ERROR DETECTED: " +
-                errorType + ConsoleColors.RESET);
-        //If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
-        if(errorType == ErrorType.NOZZLE_JAM){
-            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] HARD FAULT: Shutting down drone" +
-                    ConsoleColors.RESET);
-            // Send status update with mission information to notify scheduler to find replacement
-            sendStatusUpdate();
-            droneFaulted();
+        // Only log if this is a new error or changing error types
+        if (this.currentError != errorType) {
+            this.currentError = errorType;
+            System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] ERROR DETECTED: " +
+                    errorType + ConsoleColors.RESET);
+            
+            // If it's a hard fault, immediately transition to faulted state (nozzle bay/bay door issue)
+            if (errorType == ErrorType.NOZZLE_JAM) {
+                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] HARD FAULT: Shutting down drone" +
+                        ConsoleColors.RESET);
+                // Set to faulted state first so status update shows faulted state
+                droneFaulted();
+                // Send status update with mission information to notify scheduler to find replacement
+                sendStatusUpdate();
+            }
         }
     }
 
@@ -1075,14 +1079,15 @@ public class DroneSubsystem {
 
             //Check for injected errors from the event
             if(event.hasError()){
-                System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Error injected from input: " +
-                        event.getError() + ConsoleColors.RESET);
+                // Set the error first - this will log the error detection
                 drone.setError(event.getError());
 
                 //if it's a hard fault like nozzle/bay door fault, we abort mission!
                 if (event.getError() == ErrorType.NOZZLE_JAM) {
                     System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Hard fault detected, aborting mission" +
                             ConsoleColors.RESET);
+                    // Set to faulted state
+                    drone.droneFaulted();
                     // Send status update with task information to notify scheduler to find replacement
                     drone.sendStatusUpdate();
                     return;
@@ -1119,9 +1124,10 @@ public class DroneSubsystem {
             if (drone.hasError() && (drone.getCurrentError() == ErrorType.NOZZLE_JAM)){
                 System.out.println(ConsoleColors.RED + "[" + droneId.toUpperCase() + "] Nozzle/bay door fault detected, cannot drop agent" +
                         ConsoleColors.RESET);
+                // Set to faulted state first
+                drone.droneFaulted();
                 // Send status update with task information to notify scheduler to find replacement
                 drone.sendStatusUpdate();
-                drone.droneFaulted();
                 return;
             }
 
