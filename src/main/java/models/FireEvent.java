@@ -42,12 +42,10 @@ public class FireEvent {
         this.assignedDroneId = null;
         this.assignedDrones = new HashSet<>();
 
-        // Set the error type based on the passed string
+        // Set the error type based on the passed string - no random errors
         if (errorType.equals("ERROR")) {
-            // Randomly assign an error for the generic ERROR case
-            ErrorType[] errorTypes = ErrorType.values();
-            int randomI = new Random().nextInt(errorTypes.length - 1); // Randomly pick an error
-            this.error = errorTypes[randomI];
+            // Set to NONE instead of randomly assigning an error
+            this.error = ErrorType.NONE;
         } else {
             // Try to match a specific error type
             setErrorFromString(errorType);
@@ -108,7 +106,13 @@ public class FireEvent {
      */
     public void assignDrone(String droneId) {
         this.assignedDroneId = droneId; // Keep for backward compatibility
-        this.assignedDrones.add(droneId); // Add to the set of all assigned drones
+        
+        // Make sure we're not adding the same drone multiple times
+        if (this.assignedDrones.contains(droneId)) {
+            System.out.println("[FireEvent] Warning: Drone " + droneId + " already assigned to event for Zone " + zoneID);
+        } else {
+            this.assignedDrones.add(droneId); // Add to the set of all assigned drones
+        }
     }
 
     /**

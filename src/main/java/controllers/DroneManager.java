@@ -218,7 +218,7 @@ public class DroneManager {
     
     /**
      * Finds the best drone to handle a fire event based on availability, workload balance,
-     * and proximity
+     * and proximity. Also avoids returning drones already assigned to this event.
      * 
      * @param event the fire event to handle
      * @return the selected drone status or null if no drones available
@@ -228,24 +228,28 @@ public class DroneManager {
         Location fireLocation = getLocationForZone(zoneId);
         String severity = event.getSeverity();
         
-        // First, look for an en-route drone that can be reassigned based on path
-        DroneStatus enRouteDrone = findEnRouteDroneThatPasses(fireLocation, severity);
-        if (enRouteDrone != null) {
-            return enRouteDrone;
-        }
+        // Skip en-route drone reassignment - we want separate drones for each assignment
         
-        // find available drone with balanced workload and proximity
+        // Find available drone with balanced workload and proximity
+        // Also exclude drones already assigned to this event
         List<DroneStatus> availableDrones = drones.values().stream()
                 .filter(DroneStatus::isAvailable)
                 .filter(drone -> !drone.hasHardFault()) // Explicitly exclude drones with hard faults
-            .sorted(Comparator.comparingInt(DroneStatus::getZonesServiced)
-                    .thenComparingInt(d -> d.distanceTo(fireLocation)))
-            .toList();
+                .filter(drone -> !event.isDroneAssigned(drone.getDroneId())) // Exclude drones already assigned
+                .sorted(Comparator.comparingInt(DroneStatus::getZonesServiced)
+                        .thenComparingInt(d -> d.distanceTo(fireLocation)))
+                .toList();
             
         if (availableDrones.isEmpty()) {
+            // No available drones found
+            System.out.println("[DRONE MANAGER] No available drones found for Zone " + zoneId);
             return null;
         } else {
-            return availableDrones.get(0);
+            DroneStatus selected = availableDrones.get(0);
+            System.out.println("[DRONE MANAGER] Selected drone " + selected.getDroneId() + 
+                            " (missions: " + selected.getZonesServiced() + 
+                            ", distance: " + selected.distanceTo(fireLocation) + ")");
+            return selected;
         }
     }
     
