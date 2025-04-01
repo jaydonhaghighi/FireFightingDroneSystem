@@ -5,6 +5,7 @@ import models.FireEvent;
 import models.Location;
 import models.Zone;
 
+import javax.swing.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.io.*;
 import java.net.*;
@@ -52,6 +53,9 @@ public class Scheduler {
     // Drone management
     private DroneManager droneManager;
     private Map<String, Integer> dronePorts = new HashMap<>(); // Maps drone IDs to their receive ports
+    
+    // Visualization component
+    private DroneVisualization visualization;
 
     /**
      * Constructs a new Scheduler with drone management capability
@@ -74,6 +78,12 @@ public class Scheduler {
             sendSocket = new DatagramSocket(sendPort);
             receiveSocket = new DatagramSocket(receivePort);
             System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Initialized at " + baseLocation + SchedulerColors.RESET);
+            
+            // Initialize the visualization component
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                visualization = new DroneVisualization(droneManager);
+                System.out.println(SchedulerColors.PURPLE + "[SCHEDULER] Visualization initialized" + SchedulerColors.RESET);
+            });
         } catch (SocketException e) {
             e.printStackTrace();
         }
@@ -241,6 +251,11 @@ public class Scheduler {
                     System.out.println(SchedulerColors.BOLD_YELLOW + "[SCHEDULER] Added replacement mission to Zone " + 
                                      zoneId + " with " + severity + " severity to the front of queue" + SchedulerColors.RESET);
                 }
+                
+                // Update visualization if it's initialized
+                if (visualization != null) {
+                    visualization.updateVisualization();
+                }
 
                 // Only print messages if something meaningful changed
                 if (stateChanged || locationChanged) {
@@ -255,6 +270,11 @@ public class Scheduler {
 
             System.out.println(SchedulerColors.TEAL + "[SCHEDULER] Updated drone status: " + SchedulerColors.BLUE + droneId +
                               " at " + location + " in state " + state + SchedulerColors.RESET);
+                              
+            // Update visualization if it's initialized
+            if (visualization != null) {
+                visualization.updateVisualization();
+            }
 
         } catch (Exception e) {
             System.out.println(SchedulerColors.RED + "[SCHEDULER] Error processing drone status: " + e + SchedulerColors.RESET);
@@ -453,6 +473,11 @@ public class Scheduler {
                                 dispatchedDrones.size() + " drones to Zone " + zoneId +
                                 " (" + severity + " fire)" + SchedulerColors.RESET);
                     }
+                    
+                    // Update visualization if it's initialized
+                    if (visualization != null) {
+                        visualization.updateVisualization();
+                    }
                 } else {
                     // No available drones at all
                     System.out.println(SchedulerColors.RED + "[WAITING] No available drones for Zone " +
@@ -577,6 +602,11 @@ public class Scheduler {
 
                     // Visualize zones and drones
                     visualizeZonesAndDrones();
+                    
+                    // Update the visual UI if initialized
+                    if (visualization != null) {
+                        visualization.updateVisualization();
+                    }
                 }
 
                 // Brief pause to prevent tight loop
