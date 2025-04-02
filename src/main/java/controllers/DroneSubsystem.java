@@ -881,7 +881,8 @@ public class DroneSubsystem {
                          ConsoleColors.RESET);
         
         // Simulate movement in steps for smoother visualization
-        int steps = Math.max(10, distance / 50);
+        // Increase steps for much smoother movement
+        int steps = Math.max(50, distance / 10);
         if (steps == 0) steps = 1;
         int stepDelayMs = travelTimeMs / steps;
 
