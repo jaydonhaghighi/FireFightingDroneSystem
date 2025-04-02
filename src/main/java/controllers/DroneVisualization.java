@@ -1,5 +1,6 @@
 package controllers;
 
+import models.DroneSpecifications;
 import models.DroneStatus;
 import models.FireEvent;
 import models.Location;
@@ -17,6 +18,15 @@ import java.util.List;
  * Shows drones, zones, and fire events on a map
  */
 public class DroneVisualization extends JFrame {
+    
+    /**
+     * Helper method to create a bold label
+     */
+    private JLabel createBoldLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Arial", Font.BOLD, 11));
+        return label;
+    }
     private final DroneManager droneManager;
     private Map<String, Color> droneColors = new HashMap<>();
     private final int GRID_SIZE = 5; // Units per grid cell
@@ -64,12 +74,19 @@ public class DroneVisualization extends JFrame {
         mapPanel = new MapPanel();
         add(mapPanel, BorderLayout.CENTER);
         
-        // Create the info panel for drone status
+        // Create the info panel for drone status with scrolling capability
         infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
-        infoPanel.setPreferredSize(new Dimension(300, PANEL_HEIGHT));
-        infoPanel.setBorder(BorderFactory.createTitledBorder("Drone Status"));
-        add(infoPanel, BorderLayout.EAST);
+        
+        // Wrap the info panel in a scroll pane
+        JScrollPane scrollPane = new JScrollPane(infoPanel);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setPreferredSize(new Dimension(300, PANEL_HEIGHT));
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Drone Status"));
+        
+        // Add the scroll pane instead of the panel directly
+        add(scrollPane, BorderLayout.EAST);
         
         // Show the frame
         setLocationRelativeTo(null);
@@ -101,16 +118,30 @@ public class DroneVisualization extends JFrame {
             JLabel emptyLabel = new JLabel("No drones registered");
             infoPanel.add(emptyLabel);
         } else {
-            // Add a header for the drone status section
-            JLabel headerLabel = new JLabel("Drone Status Information");
-            headerLabel.setFont(new Font("Arial", Font.BOLD, 14));
-            headerLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-            infoPanel.add(headerLabel);
-            infoPanel.add(Box.createVerticalStrut(10));
-            
             // Sort drones by ID for consistent display
             List<DroneStatus> sortedDrones = new ArrayList<>(drones);
             sortedDrones.sort(Comparator.comparing(DroneStatus::getDroneId));
+            
+            // Add a header for the drone status section
+            JPanel headerPanel = new JPanel();
+            headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
+            headerPanel.setBackground(new Color(240, 240, 255));
+            headerPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            
+            JLabel headerLabel = new JLabel("Drone Fleet Status");
+            headerLabel.setFont(new Font("Arial", Font.BOLD, 16));
+            headerLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            headerPanel.add(headerLabel);
+            
+            JLabel subHeaderLabel = new JLabel("Active drones: " + sortedDrones.size());
+            subHeaderLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+            subHeaderLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            headerPanel.add(subHeaderLabel);
+            
+            infoPanel.add(headerPanel);
+            infoPanel.add(Box.createVerticalStrut(10));
+            
             
             // Display info for each drone
             for (DroneStatus drone : sortedDrones) {
@@ -120,53 +151,94 @@ public class DroneVisualization extends JFrame {
                 }
                 Color droneColor = droneColors.get(drone.getDroneId());
                 
-                // Create a panel for this drone
+                // Create a more detailed panel for this drone with specifications
                 JPanel dronePanel = new JPanel();
                 dronePanel.setLayout(new BoxLayout(dronePanel, BoxLayout.Y_AXIS));
-                dronePanel.setBorder(BorderFactory.createLineBorder(droneColor, 2));
+                dronePanel.setBorder(BorderFactory.createTitledBorder(
+                    BorderFactory.createLineBorder(droneColor, 2), 
+                    drone.getDroneId().toUpperCase(), 
+                    javax.swing.border.TitledBorder.LEFT, 
+                    javax.swing.border.TitledBorder.TOP,
+                    new Font("Arial", Font.BOLD, 12)
+                ));
                 dronePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 
-                // Drone ID with color indicator
-                JPanel idPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-                JLabel colorBox = new JLabel(" ");
-                colorBox.setOpaque(true);
-                colorBox.setBackground(droneColor);
-                colorBox.setPreferredSize(new Dimension(15, 15));
-                idPanel.add(colorBox);
-                idPanel.add(new JLabel(drone.getDroneId().toUpperCase()));
-                dronePanel.add(idPanel);
+                // Create grid layout for drone details
+                JPanel detailsPanel = new JPanel(new GridLayout(0, 2, 5, 2));
+                detailsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 
-                // Location info
-                dronePanel.add(new JLabel("Location: " + drone.getCurrentLocation()));
+                // Current location
+                detailsPanel.add(createBoldLabel("Location:"));
+                detailsPanel.add(new JLabel(drone.getCurrentLocation().toString()));
                 
                 // State info with appropriate color
-                JLabel stateLabel = new JLabel("State: " + drone.getState());
+                detailsPanel.add(createBoldLabel("State:"));
+                JLabel stateLabel = new JLabel(drone.getState());
                 stateLabel.setForeground(getStateColor(drone.getState()));
-                dronePanel.add(stateLabel);
+                stateLabel.setFont(new Font("Arial", Font.BOLD, 12));
+                detailsPanel.add(stateLabel);
+                
+                // Add specifications
+                DroneSpecifications specs = drone.getSpecifications();
+                if (specs != null) {
+                    detailsPanel.add(createBoldLabel("Max Speed:"));
+                    detailsPanel.add(new JLabel(specs.getMaxSpeed() + " km/h"));
+                    
+                    detailsPanel.add(createBoldLabel("Capacity:"));
+                    detailsPanel.add(new JLabel(specs.getCarryCapacity() + " L"));
+                    
+                    detailsPanel.add(createBoldLabel("Flow Rate:"));
+                    detailsPanel.add(new JLabel(specs.getFlowRate() + " L/s"));
+                }
                 
                 // Task info if applicable
                 FireEvent currentTask = drone.getCurrentTask();
                 if (currentTask != null) {
-                    dronePanel.add(new JLabel("Task: Zone " + currentTask.getZoneID() + 
-                                             " (" + currentTask.getSeverity() + ")"));
+                    detailsPanel.add(createBoldLabel("Task:"));
+                    JLabel taskLabel = new JLabel("Zone " + currentTask.getZoneID() + 
+                                               " (" + currentTask.getSeverity() + ")");
+                    taskLabel.setForeground(getSeverityColor(currentTask.getSeverity()));
+                    detailsPanel.add(taskLabel);
+                    
+                    detailsPanel.add(createBoldLabel("Target:"));
+                    detailsPanel.add(new JLabel(drone.getTargetLocation().toString()));
                 }
                 
                 // Error info if applicable
                 if (drone.getErrorType() != FireEvent.ErrorType.NONE) {
-                    JLabel errorLabel = new JLabel("Error: " + drone.getErrorType());
+                    detailsPanel.add(createBoldLabel("Error:"));
+                    JLabel errorLabel = new JLabel(drone.getErrorType().toString());
                     errorLabel.setForeground(Color.RED);
-                    dronePanel.add(errorLabel);
+                    errorLabel.setFont(new Font("Arial", Font.BOLD, 12));
+                    detailsPanel.add(errorLabel);
                 }
+                
+                // Add missions completed info
+                detailsPanel.add(createBoldLabel("Missions:"));
+                detailsPanel.add(new JLabel(String.valueOf(drone.getZonesServiced())));
+                
+                dronePanel.add(detailsPanel);
                 
                 infoPanel.add(dronePanel);
                 infoPanel.add(Box.createVerticalStrut(10));
             }
             
-            // Add zone fire status section
+            // Add zone fire status section with a divider
+            infoPanel.add(new JSeparator());
+            infoPanel.add(Box.createVerticalStrut(10));
+            
+            JPanel fireHeaderPanel = new JPanel();
+            fireHeaderPanel.setLayout(new BoxLayout(fireHeaderPanel, BoxLayout.Y_AXIS));
+            fireHeaderPanel.setBackground(new Color(255, 240, 240));
+            fireHeaderPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            fireHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            
             JLabel zoneHeader = new JLabel("Active Fires");
-            zoneHeader.setFont(new Font("Arial", Font.BOLD, 14));
+            zoneHeader.setFont(new Font("Arial", Font.BOLD, 16));
             zoneHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
-            infoPanel.add(zoneHeader);
+            fireHeaderPanel.add(zoneHeader);
+            
+            infoPanel.add(fireHeaderPanel);
             infoPanel.add(Box.createVerticalStrut(10));
             
             // Display active fire zones
@@ -181,15 +253,29 @@ public class DroneVisualization extends JFrame {
                 infoPanel.add(noFiresLabel);
             } else {
                 for (Zone zone : activeFireZones) {
-                    JPanel zonePanel = new JPanel();
-                    zonePanel.setLayout(new BoxLayout(zonePanel, BoxLayout.Y_AXIS));
-                    zonePanel.setBorder(BorderFactory.createLineBorder(getSeverityColor(zone.getSeverity()), 2));
+                    JPanel zonePanel = new JPanel(new GridLayout(0, 2, 5, 2));
+                    zonePanel.setBorder(BorderFactory.createTitledBorder(
+                        BorderFactory.createLineBorder(getSeverityColor(zone.getSeverity()), 2),
+                        "Zone " + zone.getId(),
+                        javax.swing.border.TitledBorder.LEFT,
+                        javax.swing.border.TitledBorder.TOP,
+                        new Font("Arial", Font.BOLD, 12),
+                        getSeverityColor(zone.getSeverity())
+                    ));
                     zonePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                     
-                    JLabel zoneLabel = new JLabel("Zone " + zone.getId() + ": " + zone.getSeverity() + 
-                                               " at " + zone.getLocation());
-                    zoneLabel.setForeground(getSeverityColor(zone.getSeverity()));
-                    zonePanel.add(zoneLabel);
+                    // Zone information
+                    zonePanel.add(createBoldLabel("Severity:"));
+                    JLabel severityLabel = new JLabel(zone.getSeverity());
+                    severityLabel.setForeground(getSeverityColor(zone.getSeverity()));
+                    severityLabel.setFont(new Font("Arial", Font.BOLD, 12));
+                    zonePanel.add(severityLabel);
+                    
+                    zonePanel.add(createBoldLabel("Location:"));
+                    zonePanel.add(new JLabel(zone.getLocation().toString()));
+                    
+                    zonePanel.add(createBoldLabel("Size:"));
+                    zonePanel.add(new JLabel(zone.getWidth() + "m × " + zone.getHeight() + "m"));
                     
                     infoPanel.add(zonePanel);
                     infoPanel.add(Box.createVerticalStrut(5));
@@ -239,9 +325,9 @@ public class DroneVisualization extends JFrame {
         severity = severity.toUpperCase();
         switch (severity) {
             case "LOW":
-                return new Color(255, 255, 0); // Yellow
+                return new Color(255, 210, 0); // Yellow
             case "MODERATE":
-                return new Color(255, 165, 0); // Orange
+                return new Color(255, 130, 0); // Orange
             case "HIGH":
                 return new Color(255, 0, 0); // Red
             default:
@@ -345,20 +431,40 @@ public class DroneVisualization extends JFrame {
                 int x = MARGIN + (int)(loc.getX() * scale);
                 int y = MARGIN + (int)(loc.getY() * scale);
                 
+                // Draw zone as a rectangle using actual dimensions
+                int zoneWidth = (int)(zone.getWidth() * scale);
+                int zoneHeight = (int)(zone.getHeight() * scale);
+                int zoneX = MARGIN + (int)(zone.getTopLeft().getX() * scale);
+                int zoneY = MARGIN + (int)(zone.getTopLeft().getY() * scale);
+                
                 // Draw zone outline
+                g2d.setColor(new Color(100, 100, 100, 80)); // Semi-transparent gray
+                g2d.fillRect(zoneX, zoneY, zoneWidth, zoneHeight);
                 g2d.setColor(Color.DARK_GRAY);
-                g2d.drawOval(x - 10, y - 10, 20, 20);
+                g2d.drawRect(zoneX, zoneY, zoneWidth, zoneHeight);
                 
                 // Draw zone label
-                g2d.drawString("Z" + zone.getId(), x - 5, y + 5);
+                g2d.setFont(new Font("Arial", Font.BOLD, 14));
+                g2d.drawString("Zone " + zone.getId(), x - 20, y - 15);
+                g2d.setFont(new Font("Arial", Font.PLAIN, 12));
                 
                 // If zone has a fire, draw it
                 if (zone.hasFire()) {
-                    // Draw fire symbol
+                    // Draw fire symbol with severity
                     g2d.setColor(getSeverityColor(zone.getSeverity()));
-                    g2d.fillOval(x - 8, y - 8, 16, 16);
+                    int fireSize = 30;
+                    g2d.fillOval(x - fireSize/2, y - fireSize/2, fireSize, fireSize);
                     g2d.setColor(Color.BLACK);
-                    g2d.drawOval(x - 8, y - 8, 16, 16);
+                    g2d.drawOval(x - fireSize/2, y - fireSize/2, fireSize, fireSize);
+                    
+                    // Add severity label inside fire symbol
+                    g2d.setColor(Color.WHITE);
+                    g2d.setFont(new Font("Arial", Font.BOLD, 10));
+                    FontMetrics fm = g2d.getFontMetrics();
+                    String sevText = zone.getSeverity().substring(0, 1); // First letter of severity
+                    int textWidth = fm.stringWidth(sevText);
+                    g2d.drawString(sevText, x - textWidth/2, y + 4);
+                    g2d.setFont(new Font("Arial", Font.PLAIN, 12));
                 }
             }
             
@@ -392,24 +498,53 @@ public class DroneVisualization extends JFrame {
                     g2d.setStroke(new BasicStroke(1));
                 }
                 
-                // Draw drone
+                // Determine drone direction - if drone is moving, point triangle in that direction
+                int triangleSize = 10;
+                double angle = 0; // Default pointing up
+                
+                if (drone.getTargetLocation() != null && !drone.getCurrentLocation().equals(drone.getTargetLocation())) {
+                    Location target = drone.getTargetLocation();
+                    // Calculate angle between current and target
+                    angle = Math.atan2(target.getY() - loc.getY(), target.getX() - loc.getX());
+                }
+                
+                // Calculate triangle points based on direction
+                int[] xPoints = new int[3];
+                int[] yPoints = new int[3];
+                
+                // Triangle pointing in direction of movement
+                xPoints[0] = x + (int)(triangleSize * Math.cos(angle));
+                yPoints[0] = y + (int)(triangleSize * Math.sin(angle));
+                xPoints[1] = x + (int)(triangleSize * Math.cos(angle + 2.5));
+                yPoints[1] = y + (int)(triangleSize * Math.sin(angle + 2.5));
+                xPoints[2] = x + (int)(triangleSize * Math.cos(angle - 2.5));
+                yPoints[2] = y + (int)(triangleSize * Math.sin(angle - 2.5));
+                
+                // Draw drone body
                 g2d.setColor(droneColor);
-                // Use a triangle to represent the drone
-                int[] xPoints = {x, x - 5, x + 5};
-                int[] yPoints = {y - 8, y + 8, y + 8};
                 g2d.fillPolygon(xPoints, yPoints, 3);
                 g2d.setColor(Color.BLACK);
                 g2d.drawPolygon(xPoints, yPoints, 3);
+                
+                // Draw drone state indicator
+                Color stateColor = getStateColor(drone.getState());
+                g2d.setColor(stateColor);
+                g2d.fillOval(x - 3, y - 3, 6, 6);
+                g2d.setColor(Color.BLACK);
+                g2d.drawOval(x - 3, y - 3, 6, 6);
                 
                 // Highlight the drone if it has an error
                 if (drone.getErrorType() != FireEvent.ErrorType.NONE) {
                     g2d.setColor(Color.RED);
                     g2d.drawOval(x - 15, y - 15, 30, 30);
+                    g2d.setColor(new Color(255, 0, 0, 100)); // Semi-transparent red
+                    g2d.fillOval(x - 15, y - 15, 30, 30);
                 }
                 
-                // Draw drone ID
+                // Draw drone ID only
                 g2d.setColor(Color.BLACK);
-                g2d.drawString(drone.getDroneId(), x - 10, y + 20);
+                g2d.setFont(new Font("Arial", Font.BOLD, 11));
+                g2d.drawString(drone.getDroneId(), x - 15, y + 20);
             }
             
             // Draw scale bar
