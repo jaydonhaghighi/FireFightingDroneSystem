@@ -299,15 +299,15 @@ public class DroneVisualization extends JFrame {
         state = state.toUpperCase();
         switch (state) {
             case "IDLE":
-                return new Color(0, 128, 0); // Green
+                return new Color(0, 128, 0);
             case "ENROUTE":
-                return new Color(0, 0, 192); // Blue
+                return new Color(0, 0, 192);
             case "DROPPINGAGENT":
-                return new Color(255, 165, 0); // Orange
+                return new Color(255, 165, 0);
             case "ARRIVEDTOBASE":
-                return new Color(0, 128, 128); // Teal
+                return new Color(0, 128, 128);
             case "FAULT":
-                return new Color(192, 0, 0); // Dark Red
+                return new Color(192, 0, 0);
             default:
                 return Color.BLACK;
         }
@@ -325,11 +325,11 @@ public class DroneVisualization extends JFrame {
         severity = severity.toUpperCase();
         switch (severity) {
             case "LOW":
-                return new Color(255, 210, 0); // Yellow
+                return new Color(255, 210, 0);
             case "MODERATE":
-                return new Color(255, 130, 0); // Orange
+                return new Color(255, 130, 0);
             case "HIGH":
-                return new Color(255, 0, 0); // Red
+                return new Color(255, 0, 0);
             default:
                 return Color.BLACK;
         }
@@ -343,16 +343,16 @@ public class DroneVisualization extends JFrame {
     private Color generateRandomColor() {
         // Generate colors that are visually distinct
         Color[] presetColors = {
-            new Color(192, 0, 0),     // Dark Red
-            new Color(0, 0, 192),     // Dark Blue
-            new Color(0, 128, 0),     // Dark Green
-            new Color(128, 0, 128),   // Purple
-            new Color(128, 128, 0),   // Olive
-            new Color(0, 128, 128),   // Teal
-            new Color(128, 64, 0),    // Brown
-            new Color(64, 0, 128),    // Indigo
-            new Color(128, 0, 64),    // Burgundy
-            new Color(0, 64, 128)     // Steel Blue
+            new Color(192, 0, 0),
+            new Color(0, 0, 192),
+            new Color(0, 128, 0),
+            new Color(128, 0, 128),
+            new Color(128, 128, 0),
+            new Color(0, 128, 128),
+            new Color(128, 64, 0),
+            new Color(64, 0, 128),
+            new Color(128, 0, 64),
+            new Color(0, 64, 128)
         };
         
         // Use preset colors first, then fall back to random colors if needed
