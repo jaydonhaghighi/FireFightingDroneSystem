@@ -422,9 +422,9 @@ public class Scheduler {
                 // Delay between dispatches
                 if (i < dronesNeeded - 1) {
                     System.out.println(SchedulerColors.BOLD_WHITE + 
-                                     "[TIME] Waiting 2 seconds before dispatching next drone..." +
+                                     "[TIME] Waiting 4 seconds before dispatching next drone..." +
                                      SchedulerColors.RESET);
-                    Thread.sleep(2000);
+                    Thread.sleep(4000);
                 }
             } else {
                 // No more available drones

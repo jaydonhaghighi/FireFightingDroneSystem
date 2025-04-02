@@ -498,8 +498,7 @@ public class DroneVisualization extends JFrame {
                     g2d.setStroke(new BasicStroke(1));
                 }
                 
-                // Determine drone direction - if drone is moving, point triangle in that direction
-                int triangleSize = 10;
+                // Determine direction if drone is moving (for motion indicator)
                 double angle = 0; // Default pointing up
                 
                 if (drone.getTargetLocation() != null && !drone.getCurrentLocation().equals(drone.getTargetLocation())) {
@@ -508,23 +507,23 @@ public class DroneVisualization extends JFrame {
                     angle = Math.atan2(target.getY() - loc.getY(), target.getX() - loc.getX());
                 }
                 
-                // Calculate triangle points based on direction
-                int[] xPoints = new int[3];
-                int[] yPoints = new int[3];
-                
-                // Triangle pointing in direction of movement
-                xPoints[0] = x + (int)(triangleSize * Math.cos(angle));
-                yPoints[0] = y + (int)(triangleSize * Math.sin(angle));
-                xPoints[1] = x + (int)(triangleSize * Math.cos(angle + 2.5));
-                yPoints[1] = y + (int)(triangleSize * Math.sin(angle + 2.5));
-                xPoints[2] = x + (int)(triangleSize * Math.cos(angle - 2.5));
-                yPoints[2] = y + (int)(triangleSize * Math.sin(angle - 2.5));
+                // Draw drone body as a circle
+                int circleSize = 12;
                 
                 // Draw drone body
                 g2d.setColor(droneColor);
-                g2d.fillPolygon(xPoints, yPoints, 3);
+                g2d.fillOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
                 g2d.setColor(Color.BLACK);
-                g2d.drawPolygon(xPoints, yPoints, 3);
+                g2d.drawOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                
+                // Add direction indicator (small line showing movement direction)
+                if (drone.getTargetLocation() != null && !drone.getCurrentLocation().equals(drone.getTargetLocation())) {
+                    int dirLength = 8;
+                    g2d.setColor(Color.BLACK);
+                    g2d.drawLine(x, y, 
+                               x + (int)(dirLength * Math.cos(angle)), 
+                               y + (int)(dirLength * Math.sin(angle)));
+                }
                 
                 // Draw drone state indicator
                 Color stateColor = getStateColor(drone.getState());
