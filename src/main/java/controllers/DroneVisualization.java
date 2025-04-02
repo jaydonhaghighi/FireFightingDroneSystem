@@ -32,7 +32,7 @@ public class DroneVisualization extends JFrame {
     private final int GRID_SIZE = 5; // Units per grid cell
     private final int PANEL_WIDTH = 800;
     private final int PANEL_HEIGHT = 600;
-    private final int MARGIN = 50;
+    private final int MARGIN = 70; // Increased margin around the map
     private MapPanel mapPanel;
     private JPanel infoPanel;
     private DroneVisualizationThread visualizationThread;
@@ -384,58 +384,79 @@ public class DroneVisualization extends JFrame {
             Map<Integer, Zone> zones = droneManager.getAllZones();
             Collection<DroneStatus> drones = droneManager.getAllDrones();
             
-            // Determine the maximum x and y coordinates
+            // Get the actual boundaries of all zones
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
             for (Zone zone : zones.values()) {
-                Location loc = zone.getLocation();
-                maxX = Math.max(maxX, loc.getX());
-                maxY = Math.max(maxY, loc.getY());
+                // Check zone corners for max/min coordinates
+                minX = Math.min(minX, zone.getTopLeft().getX());
+                minY = Math.min(minY, zone.getTopLeft().getY());
+                maxX = Math.max(maxX, zone.getBottomRight().getX());
+                maxY = Math.max(maxY, zone.getBottomRight().getY());
             }
             
+            // Also include drone positions
             for (DroneStatus drone : drones) {
                 Location loc = drone.getCurrentLocation();
+                minX = Math.min(minX, loc.getX());
+                minY = Math.min(minY, loc.getY());
                 maxX = Math.max(maxX, loc.getX());
                 maxY = Math.max(maxY, loc.getY());
                 
                 Location targetLoc = drone.getTargetLocation();
                 if (targetLoc != null) {
+                    minX = Math.min(minX, targetLoc.getX());
+                    minY = Math.min(minY, targetLoc.getY());
                     maxX = Math.max(maxX, targetLoc.getX());
                     maxY = Math.max(maxY, targetLoc.getY());
                 }
             }
             
-            // Add margin to maximum coordinates
-            maxX = Math.max(100, maxX + 10);
-            maxY = Math.max(100, maxY + 10);
+            // Set minimum bounds to include origin (0,0)
+            minX = Math.min(minX, 0);
+            minY = Math.min(minY, 0);
             
-            // Calculate scale factors
-            double scaleX = (double)(getWidth() - 2 * MARGIN) / maxX;
-            double scaleY = (double)(getHeight() - 2 * MARGIN) / maxY;
+            // Add padding to ensure all elements are visible
+            int padding = 100;
+            minX = Math.max(0, minX - padding);
+            minY = Math.max(0, minY - padding);
+            maxX = Math.max(100, maxX + padding);
+            maxY = Math.max(100, maxY + padding);
+            
+            // Calculate scale factors based on the range of coordinates
+            double rangeX = maxX - minX;
+            double rangeY = maxY - minY;
+            double scaleX = (double)(getWidth() - 2 * MARGIN) / rangeX;
+            double scaleY = (double)(getHeight() - 2 * MARGIN) / rangeY;
+            
+            // Use the smaller scale to maintain aspect ratio
             double scale = Math.min(scaleX, scaleY);
             
             // Draw grid
             g2d.setColor(new Color(240, 240, 240));
-            for (int x = 0; x <= maxX; x += GRID_SIZE) {
-                int screenX = MARGIN + (int)(x * scale);
-                g2d.drawLine(screenX, MARGIN, screenX, MARGIN + (int)(maxY * scale));
+            // Draw vertical grid lines
+            for (int x = (minX / GRID_SIZE) * GRID_SIZE; x <= maxX; x += GRID_SIZE) {
+                int screenX = MARGIN + (int)((x - minX) * scale);
+                g2d.drawLine(screenX, MARGIN, screenX, MARGIN + (int)(rangeY * scale));
             }
             
-            for (int y = 0; y <= maxY; y += GRID_SIZE) {
-                int screenY = MARGIN + (int)(y * scale);
-                g2d.drawLine(MARGIN, screenY, MARGIN + (int)(maxX * scale), screenY);
+            // Draw horizontal grid lines
+            for (int y = (minY / GRID_SIZE) * GRID_SIZE; y <= maxY; y += GRID_SIZE) {
+                int screenY = MARGIN + (int)((y - minY) * scale);
+                g2d.drawLine(MARGIN, screenY, MARGIN + (int)(rangeX * scale), screenY);
             }
             
             // Draw zone labels
             g2d.setColor(Color.DARK_GRAY);
             for (Zone zone : zones.values()) {
                 Location loc = zone.getLocation();
-                int x = MARGIN + (int)(loc.getX() * scale);
-                int y = MARGIN + (int)(loc.getY() * scale);
+                int x = MARGIN + (int)((loc.getX() - minX) * scale);
+                int y = MARGIN + (int)((loc.getY() - minY) * scale);
                 
                 // Draw zone as a rectangle using actual dimensions
                 int zoneWidth = (int)(zone.getWidth() * scale);
                 int zoneHeight = (int)(zone.getHeight() * scale);
-                int zoneX = MARGIN + (int)(zone.getTopLeft().getX() * scale);
-                int zoneY = MARGIN + (int)(zone.getTopLeft().getY() * scale);
+                int zoneX = MARGIN + (int)((zone.getTopLeft().getX() - minX) * scale);
+                int zoneY = MARGIN + (int)((zone.getTopLeft().getY() - minY) * scale);
                 
                 // Draw zone outline
                 g2d.setColor(new Color(100, 100, 100, 80)); // Semi-transparent gray
@@ -468,8 +489,8 @@ public class DroneVisualization extends JFrame {
             
             // Draw base location
             Location baseLocation = new Location(0, 0);
-            int baseX = MARGIN + (int)(baseLocation.getX() * scale);
-            int baseY = MARGIN + (int)(baseLocation.getY() * scale);
+            int baseX = MARGIN + (int)((baseLocation.getX() - minX) * scale);
+            int baseY = MARGIN + (int)((baseLocation.getY() - minY) * scale);
             g2d.setColor(Color.BLACK);
             g2d.fillRect(baseX - 10, baseY - 10, 20, 20);
             g2d.drawString("BASE", baseX - 15, baseY + 25);
@@ -477,8 +498,8 @@ public class DroneVisualization extends JFrame {
             // Draw drones
             for (DroneStatus drone : drones) {
                 Location loc = drone.getCurrentLocation();
-                int x = MARGIN + (int)(loc.getX() * scale);
-                int y = MARGIN + (int)(loc.getY() * scale);
+                int x = MARGIN + (int)((loc.getX() - minX) * scale);
+                int y = MARGIN + (int)((loc.getY() - minY) * scale);
                 
                 // Get color for this drone
                 Color droneColor = droneColors.getOrDefault(drone.getDroneId(), Color.BLUE);
@@ -487,8 +508,8 @@ public class DroneVisualization extends JFrame {
                 if (("ENROUTE".equalsIgnoreCase(drone.getState()) || "EnRoute".equalsIgnoreCase(drone.getState())) 
                         && drone.getTargetLocation() != null) {
                     Location targetLoc = drone.getTargetLocation();
-                    int targetX = MARGIN + (int)(targetLoc.getX() * scale);
-                    int targetY = MARGIN + (int)(targetLoc.getY() * scale);
+                    int targetX = MARGIN + (int)((targetLoc.getX() - minX) * scale);
+                    int targetY = MARGIN + (int)((targetLoc.getY() - minY) * scale);
                     
                     g2d.setColor(new Color(droneColor.getRed(), droneColor.getGreen(), droneColor.getBlue(), 128));
                     g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{5}, 0));
@@ -545,15 +566,15 @@ public class DroneVisualization extends JFrame {
             }
             
             // Draw scale bar
-            int scaleBarLength = 50;
-            int scaleBarX = getWidth() - 100;
+            int scaleBarLength = 100;
+            int scaleBarX = getWidth() - 150;
             int scaleBarY = getHeight() - 30;
             g2d.setColor(Color.BLACK);
             g2d.drawLine(scaleBarX, scaleBarY, scaleBarX + scaleBarLength, scaleBarY);
             g2d.drawLine(scaleBarX, scaleBarY - 5, scaleBarX, scaleBarY + 5);
             g2d.drawLine(scaleBarX + scaleBarLength, scaleBarY - 5, scaleBarX + scaleBarLength, scaleBarY + 5);
             int distanceRepresented = (int)(scaleBarLength / scale);
-            g2d.drawString(distanceRepresented + " units", scaleBarX, scaleBarY - 10);
+            g2d.drawString(distanceRepresented + " meters", scaleBarX, scaleBarY - 10);
         }
     }
 
