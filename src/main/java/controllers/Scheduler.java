@@ -6,10 +6,16 @@ import models.Location;
 import models.Zone;
 
 import javax.swing.*;
-import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.text.SimpleDateFormat;
+import java.util.stream.Collectors;
 
 import static models.FireEvent.createFireEventFromString;
 
@@ -20,25 +26,191 @@ import static models.FireEvent.createFireEventFromString;
  */
 public class Scheduler {
     // Network components
-    private DatagramPacket sendPacket, receivePacket;
-    private DatagramSocket sendSocket, receiveSocket;
+    private final DatagramSocket sendSocket;
+    private final DatagramSocket receiveSocket;
     private final int sendPort = 6000;
     private final int receivePort = 6001;
     private final InetAddress fireIncidentIP;
     
-    // Event management using priority queue based on severity
-    private PriorityBlockingQueue<FireEvent> events = new PriorityBlockingQueue<>(20, new FireEventComparator());
+    // Thread-safe event queue based on severity priority
+    private final PriorityBlockingQueue<FireEvent> eventQueue;
     
-    // Drone management
-    private DroneManager droneManager;
-    private Map<String, Integer> dronePorts = new HashMap<>(); // Maps drone IDs to their receive ports
+    // Drone management with thread-safety
+    private final DroneManager droneManager;
+    private final ConcurrentMap<String, Integer> dronePorts;
     
-    // Fire events tracking
-    private Map<Integer, Integer> fireEventAssignedDrones = new HashMap<>(); // Maps zoneId to number of drones assigned
-    private Map<Integer, Integer> fireEventRequiredDrones = new HashMap<>(); // Maps zoneId to number of drones required
+    // Fire events tracking with thread-safety
+    private final ConcurrentMap<Integer, Integer> fireEventAssignedDrones;
+    private final ConcurrentMap<Integer, Integer> fireEventRequiredDrones;
+    
+    // Thread control
+    private final AtomicBoolean isRunning;
+    private final ReadWriteLock visualizationLock;
     
     // Visualization component
     private DroneVisualization visualization;
+    
+    // Executor services for concurrent operations
+    private final ScheduledExecutorService scheduledExecutor;
+    private final ExecutorService workerExecutor;
+    
+    // Logging and statistics
+    private final SimpleDateFormat timestampFormat = new SimpleDateFormat("HH:mm:ss.SSS");
+    private final AtomicInteger messageReceiveCount = new AtomicInteger(0);
+    private final AtomicInteger fireSentCount = new AtomicInteger(0);
+    private final AtomicInteger droneAssignmentCount = new AtomicInteger(0);
+    private final AtomicInteger fireExtinguishedCount = new AtomicInteger(0);
+    private final ConcurrentMap<String, Long> methodExecutionTimes = new ConcurrentHashMap<>();
+    private final boolean verboseLogging = true; // Set to true for detailed logs
+    
+    /**
+     * Logs a message with the current timestamp and thread information
+     */
+    private void log(String message) {
+        String timestamp = timestampFormat.format(new Date());
+        String threadName = Thread.currentThread().getName();
+        System.out.printf("[%s][%s] %s%n", timestamp, threadName, message);
+    }
+    
+    /**
+     * Logs a message if verbose logging is enabled
+     */
+    private void logVerbose(String message) {
+        if (verboseLogging) {
+            log(message);
+        }
+    }
+    
+    /**
+     * Logs error messages
+     */
+    private void logError(String message, Throwable e) {
+        String timestamp = timestampFormat.format(new Date());
+        String threadName = Thread.currentThread().getName();
+        System.err.printf("[%s][%s] ERROR: %s - %s%n", timestamp, threadName, message, e.getMessage());
+        if (verboseLogging) {
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Utility method to time method execution
+     */
+    private <T> T timeExecution(String methodName, Callable<T> callable) throws Exception {
+        long startTime = System.nanoTime();
+        try {
+            return callable.call();
+        } finally {
+            long endTime = System.nanoTime();
+            long executionTime = (endTime - startTime) / 1_000_000; // Convert to ms
+            methodExecutionTimes.put(methodName, executionTime);
+            logVerbose("Method [" + methodName + "] took " + executionTime + "ms");
+        }
+    }
+    
+    /**
+     * Utility method to time void method execution
+     */
+    private void timeExecution(String methodName, Runnable runnable) {
+        long startTime = System.nanoTime();
+        try {
+            runnable.run();
+        } finally {
+            long endTime = System.nanoTime();
+            long executionTime = (endTime - startTime) / 1_000_000; // Convert to ms
+            methodExecutionTimes.put(methodName, executionTime);
+            logVerbose("Method [" + methodName + "] took " + executionTime + "ms");
+        }
+    }
+    
+    /**
+     * Logs the current state of the system for diagnostics
+     */
+    private void logSystemState() {
+        int queueSize = eventQueue.size();
+        int droneCount = droneManager.getAllDrones().size();
+        Map<Integer, Zone> zones = droneManager.getAllZones();
+        int activeFireCount = 0;
+        
+        // Count active fires
+        for (Zone zone : zones.values()) {
+            if (zone.hasFire()) {
+                activeFireCount++;
+            }
+        }
+        
+        StringBuilder state = new StringBuilder("System State: ");
+        state.append("EventQueue=").append(queueSize).append(", ");
+        state.append("Drones=").append(droneCount).append(", ");
+        state.append("ActiveFires=").append(activeFireCount).append(", ");
+        state.append("Stats[Received=").append(messageReceiveCount.get());
+        state.append(", FiresSent=").append(fireSentCount.get());
+        state.append(", DroneAssignments=").append(droneAssignmentCount.get());
+        state.append(", FiresExtinguished=").append(fireExtinguishedCount.get()).append("]");
+        
+        log(state.toString());
+        
+        // If verbose, log detailed drone status
+        if (verboseLogging) {
+            logDroneStatuses();
+            logActiveFiresDetail();
+        }
+    }
+    
+    /**
+     * Logs detailed status of each drone
+     */
+    private void logDroneStatuses() {
+        Collection<DroneStatus> drones = droneManager.getAllDrones();
+        if (drones.isEmpty()) {
+            logVerbose("No drones registered yet");
+            return;
+        }
+        
+        StringBuilder droneLog = new StringBuilder("Drone Statuses:\n");
+        for (DroneStatus drone : drones) {
+            droneLog.append("  - ").append(drone.getDroneId())
+                   .append(" [State=").append(drone.getState())
+                   .append(", Location=(").append(drone.getCurrentLocation().getX())
+                   .append(",").append(drone.getCurrentLocation().getY()).append(")")
+                   .append(", Task=").append(drone.getCurrentTask() != null ? 
+                          "Zone" + drone.getCurrentTask().getZoneID() : "None")
+                   .append("]\n");
+        }
+        logVerbose(droneLog.toString());
+    }
+    
+    /**
+     * Logs details about active fires
+     */
+    private void logActiveFiresDetail() {
+        Map<Integer, Zone> zones = droneManager.getAllZones();
+        StringBuilder fireLog = new StringBuilder("Active Fires:\n");
+        boolean hasActiveFires = false;
+        
+        for (Map.Entry<Integer, Zone> entry : zones.entrySet()) {
+            Zone zone = entry.getValue();
+            if (zone.hasFire()) {
+                hasActiveFires = true;
+                int zoneId = entry.getKey();
+                int required = fireEventRequiredDrones.getOrDefault(zoneId, 0);
+                int assigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
+                
+                fireLog.append("  - Zone").append(zoneId)
+                       .append(" [Severity=").append(zone.getSeverity())
+                       .append(", Location=(").append(zone.getLocation().getX())
+                       .append(",").append(zone.getLocation().getY()).append(")")
+                       .append(", Drones=").append(assigned).append("/").append(required)
+                       .append("]\n");
+            }
+        }
+        
+        if (!hasActiveFires) {
+            fireLog.append("  No active fires\n");
+        }
+        
+        logVerbose(fireLog.toString());
+    }
 
     /**
      * Custom comparator for FireEvent to prioritize based on severity
@@ -53,14 +225,17 @@ public class Scheduler {
             // If severity is the same, compare by time (older events first)
             return e1.getTime().compareTo(e2.getTime());
         }
-        
-        private int getSeverityWeight(String severity) {
-            switch (severity.toLowerCase()) {
-                case "high": return 100;
-                case "moderate": return 50;
-                case "low": return 10;
-                default: return 0;
-            }
+    }
+    
+    /**
+     * Helper method to get numeric weight for severity levels
+     */
+    private static int getSeverityWeight(String severity) {
+        switch (severity.toLowerCase()) {
+            case "high": return 100;
+            case "moderate": return 50;
+            case "low": return 10;
+            default: return 0;
         }
     }
 
@@ -68,40 +243,83 @@ public class Scheduler {
      * Constructs a new Scheduler with drone management capability
      *
      * @param ip The IP address of the fire incident system
+     * @throws SocketException if socket creation fails
      */
-    public Scheduler(InetAddress ip) {
+    public Scheduler(InetAddress ip) throws SocketException {
+        log("Initializing Scheduler");
         this.fireIncidentIP = ip;
+        this.eventQueue = new PriorityBlockingQueue<>(20, new FireEventComparator());
+        this.dronePorts = new ConcurrentHashMap<>();
+        this.fireEventAssignedDrones = new ConcurrentHashMap<>();
+        this.fireEventRequiredDrones = new ConcurrentHashMap<>();
+        this.isRunning = new AtomicBoolean(true);
+        this.visualizationLock = new ReentrantReadWriteLock();
+        
+        // Initialize base resources
         Location baseLocation = new Location(0, 0);
         this.droneManager = new DroneManager(baseLocation);
-
-        // Register drone ports for 10 drones using the same calculation as in DroneSubsystem
+        log("DroneManager initialized with base at " + baseLocation);
+        
+        // Initialize network resources
+        try {
+            log("Creating network sockets (send=" + sendPort + ", receive=" + receivePort + ")");
+            this.sendSocket = new DatagramSocket(sendPort);
+            this.receiveSocket = new DatagramSocket(receivePort);
+        } catch (SocketException e) {
+            logError("Failed to create sockets", e);
+            throw e;
+        }
+        
+        // Initialize thread pools
+        log("Initializing thread pools");
+        this.scheduledExecutor = Executors.newScheduledThreadPool(2);
+        this.workerExecutor = Executors.newCachedThreadPool();
+        
+        // Register drone ports for communication
+        registerDronePorts();
+        
+        // Initialize the visualization component
+        initializeVisualization();
+        
+        // Schedule periodic logging
+        scheduledExecutor.scheduleAtFixedRate(this::logSystemState, 10, 10, TimeUnit.SECONDS);
+        
+        log("Scheduler initialization complete");
+    }
+    
+    /**
+     * Registers ports for all drones to enable communication
+     */
+    private void registerDronePorts() {
+        log("Registering communication ports for drones");
         for (int i = 1; i <= 10; i++) {
             String droneId = "drone" + i;
             int port = 7001 + (i * 100); // Same calculation as DroneSubsystem uses
-            registerDronePort(droneId, port);
+            dronePorts.put(droneId, port);
+            logVerbose("Registered " + droneId + " on port " + port);
         }
-
-        try {
-            sendSocket = new DatagramSocket(sendPort);
-            receiveSocket = new DatagramSocket(receivePort);
-            
-            // Initialize the visualization component
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                visualization = new DroneVisualization(droneManager);
-            });
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
+        log("Registered ports for 10 drones");
     }
-
+    
     /**
-     * Registers a drone port for communication
-     *
-     * @param droneId The drone identifier
-     * @param port The port number for communication
+     * Initializes the visualization component on the Event Dispatch Thread
      */
-    private void registerDronePort(String droneId, int port) {
-        dronePorts.put(droneId, port);
+    private void initializeVisualization() {
+        log("Initializing visualization component on EDT");
+        SwingUtilities.invokeLater(() -> {
+            try {
+                log("Acquiring visualization write lock");
+                visualizationLock.writeLock().lock();
+                log("Creating DroneVisualization");
+                visualization = new DroneVisualization(droneManager);
+                log("Visualization component initialized");
+            } catch (Exception e) {
+                logError("Failed to initialize visualization", e);
+            } finally {
+                visualizationLock.writeLock().unlock();
+                log("Released visualization write lock");
+            }
+        });
     }
 
     /**
@@ -109,37 +327,55 @@ public class Scheduler {
      * @return FireEvent if it's a fire event, null otherwise
      */
     public FireEvent receive() {
-        byte[] data = new byte[100];
-        receivePacket = new DatagramPacket(data, data.length);
-
         try {
-            receiveSocket.receive(receivePacket);  // Receive the packet as usual
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        int len = receivePacket.getLength();
-        String r = new String(data, 0, len);
-        
-        // Check if this is a drone status update
-        if (isDroneStatusUpdate(r)) {
-            processDroneStatusUpdate(r);
-            return null;  // Early return, we don't want to continue parsing as FireEvent if it's a status update
-        }
-
-        // Try to parse as a FireEvent
-        try {
-            FireEvent fireEvent = createFireEventFromString(r);
-            if (fireEvent != null) {
-                return fireEvent;  // Return the valid fire event
-            }
+            return timeExecution("receive", () -> {
+                logVerbose("Waiting for incoming packet...");
+                byte[] data = new byte[100];
+                DatagramPacket receivePacket = new DatagramPacket(data, data.length);
+    
+                try {
+                    receiveSocket.receive(receivePacket);
+                    messageReceiveCount.incrementAndGet();
+                    
+                    int len = receivePacket.getLength();
+                    String message = new String(data, 0, len);
+                    InetAddress sender = receivePacket.getAddress();
+                    int port = receivePacket.getPort();
+                    
+                    log("Received message from " + sender + ":" + port + ", length=" + len);
+                    logVerbose("Message content: " + message);
+                    
+                    // Check if this is a drone status update
+                    if (isDroneStatusUpdate(message)) {
+                        log("Message identified as drone status update");
+                        processDroneStatusUpdate(message);
+                        return null;
+                    }
+    
+                    // Try to parse as a FireEvent
+                    log("Message identified as fire event, parsing...");
+                    FireEvent event = createFireEventFromString(message);
+                    if (event != null) {
+                        log("Parsed fire event: Zone=" + event.getZoneID() + 
+                            ", Severity=" + event.getSeverity() + 
+                            ", Time=" + event.getTime());
+                    }
+                    return event;
+                } catch (IOException e) {
+                    if (isRunning.get()) {
+                        logError("Error receiving packet", e);
+                    }
+                    return null;
+                } catch (Exception e) {
+                    logError("Error parsing message", e);
+                    return null;
+                }
+            });
         } catch (Exception e) {
-            e.printStackTrace();
+            logError("Critical error in receive method", e);
+            return null;
         }
-
-        return null;
     }
-
 
     /**
      * Checks if a message is a drone status update
@@ -148,70 +384,39 @@ public class Scheduler {
      */
     private boolean isDroneStatusUpdate(String message) {
         try {
-            String[] parts = message.split(" ");
-            // Must have at least: droneId state x y
-            if (parts.length < 4) {
-                return false;
-            }
-            
-            String droneId = parts[0];
-            if (!droneId.startsWith("drone")) {
-                return false;
-            }
-            
-            // Last two elements should be coordinates
-            int x = Integer.parseInt(parts[parts.length - 2]);
-            int y = Integer.parseInt(parts[parts.length - 1]);
-            
-            return true;
+            return timeExecution("isDroneStatusUpdate", () -> {
+                logVerbose("Checking if message is a drone status update: " + message);
+                String[] parts = message.split(" ");
+                
+                // Must have at least: droneId state x y
+                if (parts.length < 4) {
+                    logVerbose("Rejected: insufficient parts in message (required 4+, found " + parts.length + ")");
+                    return false;
+                }
+                
+                String droneId = parts[0];
+                if (!droneId.startsWith("drone")) {
+                    logVerbose("Rejected: first part doesn't start with 'drone'");
+                    return false;
+                }
+                
+                // Last two elements should be coordinates
+                try {
+                    int x = Integer.parseInt(parts[parts.length - 2]);
+                    int y = Integer.parseInt(parts[parts.length - 1]);
+                    logVerbose("Validated as drone status update with coords: (" + x + "," + y + ")");
+                    return true;
+                } catch (NumberFormatException e) {
+                    logVerbose("Rejected: last two parts are not valid integers");
+                    return false;
+                }
+            });
         } catch (Exception e) {
+            logError("Error in isDroneStatusUpdate", e);
             return false;
         }
     }
 
-    /**
-     * Processes a drone status update
-     * @param message The status update message
-     */
-    private void processDroneStatusUpdate(String message) {
-        try {
-            String[] parts = message.split(" ");
-            String droneId = parts[0];
-            String state = parts[1];
-            
-            // Extract location (last two elements are x and y coordinates)
-            int x = Integer.parseInt(parts[parts.length - 2]);
-            int y = Integer.parseInt(parts[parts.length - 1]);
-            Location location = new Location(x, y);
-            
-            // Parse task and fire status information
-            TaskInfo taskInfo = extractTaskInfo(parts);
-            
-            // Register or update drone
-            DroneStatus status = droneManager.getDroneStatus(droneId);
-            if (status == null) {
-                // Register new drone
-                status = droneManager.registerDrone(droneId);
-                droneManager.updateDroneStatus(droneId, state, location, null);
-            } else {
-                // Update existing drone
-                updateExistingDrone(status, droneId, state, location, taskInfo);
-            }
-            
-            // If a drone becomes idle, check if there are active fires to assign it to
-            if (("IDLE".equalsIgnoreCase(state) || "Idle".equalsIgnoreCase(state))) {
-                checkForPendingFireEvents(status);
-            }
-            
-            // Update visualization if needed
-            if (visualization != null) {
-                visualization.updateVisualization();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-    
     /**
      * Helper class to store task info extracted from status messages
      */
@@ -222,66 +427,192 @@ public class Scheduler {
     }
     
     /**
+     * Processes a drone status update
+     * @param message The status update message
+     */
+    private void processDroneStatusUpdate(String message) {
+        try {
+            timeExecution("processDroneStatusUpdate", () -> {
+                log("Processing drone status update: " + message);
+                String[] parts = message.split(" ");
+                String droneId = parts[0];
+                String state = parts[1];
+                
+                // Extract location (last two elements are x and y coordinates)
+                int x = Integer.parseInt(parts[parts.length - 2]);
+                int y = Integer.parseInt(parts[parts.length - 1]);
+                Location location = new Location(x, y);
+                
+                log(droneId + " status update: State=" + state + ", Location=(" + x + "," + y + ")");
+                
+                // Parse task and fire status information
+                TaskInfo taskInfo = extractTaskInfo(parts);
+                
+                // Process drone update
+                DroneStatus status = droneManager.getDroneStatus(droneId);
+                if (status == null) {
+                    // Register new drone
+                    log("Registering new drone: " + droneId);
+                    status = droneManager.registerDrone(droneId);
+                }
+                
+                // Process fire extinguished status if indicated
+                boolean fireWasExtinguished = false;
+                if (taskInfo.isFireOut && taskInfo.zoneId > 0) {
+                    log("Fire-out notification for Zone " + taskInfo.zoneId + " from " + droneId);
+                    droneManager.updateZoneFireStatus(taskInfo.zoneId, false, "NONE");
+                    
+                    Integer previousAssigned = fireEventAssignedDrones.remove(taskInfo.zoneId);
+                    Integer previousRequired = fireEventRequiredDrones.remove(taskInfo.zoneId);
+                    log("Removed tracking for Zone " + taskInfo.zoneId + 
+                        " (previously " + previousAssigned + "/" + previousRequired + " drones)");
+                    
+                    fireWasExtinguished = true;
+                    fireExtinguishedCount.incrementAndGet();
+                }
+                
+                // Check if state or location changed
+                boolean stateChanged = !status.getState().equalsIgnoreCase(state);
+                boolean locationChanged = !status.getCurrentLocation().equals(location);
+                
+                // Update drone status
+                if (stateChanged) {
+                    log(droneId + " state changed: " + status.getState() + " -> " + state);
+                }
+                
+                updateDroneStatus(status, droneId, state, location, taskInfo);
+                
+                // Update visualization if needed
+                if (fireWasExtinguished || stateChanged || locationChanged) {
+                    log("Updating visualization due to changes");
+                    updateVisualization();
+                }
+                
+                // If drone becomes idle, check if there are active fires to assign it to
+                if (("IDLE".equalsIgnoreCase(state) || "Idle".equalsIgnoreCase(state))) {
+                    // Make a final copy for the lambda to use
+                    final DroneStatus finalStatus = status;
+                    log("Drone " + droneId + " is idle, submitting task to check for pending fires");
+                    
+                    // Use worker thread to process assignment to avoid blocking receive thread
+                    workerExecutor.submit(() -> {
+                        try {
+                            log("Worker thread started for " + droneId + " to find pending fire assignments");
+                            checkForPendingFireEvents(finalStatus);
+                        } catch (Exception e) {
+                            logError("Error in worker thread for " + droneId, e);
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            logError("Error processing drone status", e);
+        }
+    }
+    
+    /**
+     * Updates visualization in a thread-safe manner
+     */
+    private void updateVisualization() {
+        try {
+            timeExecution("updateVisualization", () -> {
+                logVerbose("Acquiring visualization read lock");
+                visualizationLock.readLock().lock();
+                try {
+                    if (visualization != null) {
+                        logVerbose("Submitting visualization update to Swing EDT");
+                        SwingUtilities.invokeLater(() -> {
+                            try {
+                                visualization.updateVisualization();
+                                logVerbose("Visualization updated on EDT");
+                            } catch (Exception e) {
+                                logError("Error updating visualization on EDT", e);
+                            }
+                        });
+                    } else {
+                        logVerbose("Visualization component not yet initialized, update skipped");
+                    }
+                } finally {
+                    visualizationLock.readLock().unlock();
+                    logVerbose("Released visualization read lock");
+                }
+            });
+        } catch (Exception e) {
+            logError("Error in updateVisualization", e);
+        }
+    }
+    
+    /**
      * Extracts task and fire status information from a status message
      */
     private TaskInfo extractTaskInfo(String[] parts) {
-        TaskInfo info = new TaskInfo();
-        
-        // Look for TASK: and FIRE_OUT: tags in the message
-        for (String part : parts) {
-            if (part.startsWith("TASK:")) {
-                String[] taskParts = part.split(":");
-                if (taskParts.length >= 3) {
-                    info.zoneId = Integer.parseInt(taskParts[1]);
-                    info.severity = taskParts[2];
+        try {
+            return timeExecution("extractTaskInfo", () -> {
+                TaskInfo info = new TaskInfo();
+                
+                // Look for TASK: and FIRE_OUT: tags in the message
+                for (String part : parts) {
+                    if (part.startsWith("TASK:")) {
+                        String[] taskParts = part.split(":");
+                        if (taskParts.length >= 3) {
+                            info.zoneId = Integer.parseInt(taskParts[1]);
+                            info.severity = taskParts[2];
+                            logVerbose("Extracted task info: Zone=" + info.zoneId + ", Severity=" + info.severity);
+                        }
+                    } else if (part.startsWith("FIRE_OUT:")) {
+                        String[] fireOutParts = part.split(":");
+                        if (fireOutParts.length >= 2) {
+                            info.zoneId = Integer.parseInt(fireOutParts[1]);
+                            info.isFireOut = true;
+                            logVerbose("Extracted fire-out info: Zone=" + info.zoneId);
+                        }
+                    }
                 }
-            } else if (part.startsWith("FIRE_OUT:")) {
-                String[] fireOutParts = part.split(":");
-                if (fireOutParts.length >= 2) {
-                    info.zoneId = Integer.parseInt(fireOutParts[1]);
-                    info.isFireOut = true;
-                }
-            }
+                
+                return info;
+            });
+        } catch (Exception e) {
+            logError("Error extracting task info", e);
+            return new TaskInfo();
         }
-        
-        return info;
     }
     
     /**
      * Updates an existing drone with new status information
      */
-    private void updateExistingDrone(DroneStatus status, String droneId, String state, 
-                                   Location location, TaskInfo taskInfo) {
-        // Check if state or location changed (for logging)
-        boolean stateChanged = !status.getState().equalsIgnoreCase(state);
-        boolean locationChanged = !status.getCurrentLocation().equals(location);
-
-        // Determine current task
-        FireEvent currentTask = status.getCurrentTask();
-        if (("IDLE".equalsIgnoreCase(state) || "Idle".equalsIgnoreCase(state))) {
-            // If drone was previously assigned to a fire, update our tracking
-            if (currentTask != null) {
-                int zoneId = currentTask.getZoneID();
-                // Decrement the count of assigned drones for this zone
-                if (fireEventAssignedDrones.containsKey(zoneId)) {
-                    int assigned = fireEventAssignedDrones.get(zoneId);
-                    fireEventAssignedDrones.put(zoneId, Math.max(0, assigned - 1));
+    private void updateDroneStatus(DroneStatus status, String droneId, String state, 
+                                Location location, TaskInfo taskInfo) {
+        try {
+            timeExecution("updateDroneStatus", () -> {
+                logVerbose("Updating status for " + droneId + ": state=" + state + 
+                          ", location=(" + location.getX() + "," + location.getY() + ")");
+                
+                // Handle transition to idle state
+                FireEvent currentTask = status.getCurrentTask();
+                if (("IDLE".equalsIgnoreCase(state) || "Idle".equalsIgnoreCase(state)) && 
+                    currentTask != null) {
+                    // If drone was previously assigned to a fire, update tracking
+                    int zoneId = currentTask.getZoneID();
+                    log(droneId + " is now idle, was assigned to Zone " + zoneId);
+                    
+                    // Atomically decrement the assigned count
+                    Integer oldCount = fireEventAssignedDrones.get(zoneId);
+                    if (oldCount != null) {
+                        Integer newCount = Math.max(0, oldCount - 1);
+                        fireEventAssignedDrones.put(zoneId, newCount);
+                        log("Updated drone count for Zone " + zoneId + ": " + 
+                           oldCount + " -> " + newCount);
+                    }
+                    
+                    currentTask = null; // Clear task when idle
                 }
-            }
-            currentTask = null; // Clear task if drone is idle
-        }
-        
-        // Update drone status
-        droneManager.updateDroneStatus(droneId, state, location, currentTask);
-        
-        // Handle fire extinguished notification
-        if (taskInfo.isFireOut && taskInfo.zoneId > 0) {
-            // Update zone to mark fire as extinguished
-            droneManager.updateZoneFireStatus(taskInfo.zoneId, false, "NONE");
-            
-            // Remove tracking for this fire event
-            fireEventAssignedDrones.remove(taskInfo.zoneId);
-            fireEventRequiredDrones.remove(taskInfo.zoneId);
+                
+                // Update drone status
+                droneManager.updateDroneStatus(droneId, state, location, currentTask);
+                logVerbose("DroneStatus updated successfully for " + droneId);
+            });
+        } catch (Exception e) {
+            logError("Error updating drone status for " + droneId, e);
         }
     }
 
@@ -289,50 +620,94 @@ public class Scheduler {
      * Check if there are pending fire events that need drones and assign this idle drone if needed
      */
     private void checkForPendingFireEvents(DroneStatus drone) {
-        // First update all our maps to remove any fires that are extinguished
-        cleanupExtinguishedFires();
-        
-        // Find the highest priority fire that needs more drones
-        Integer highestPriorityZoneId = null;
-        String highestPrioritySeverity = null;
-        
-        for (Map.Entry<Integer, Integer> entry : fireEventRequiredDrones.entrySet()) {
-            int zoneId = entry.getKey();
-            int required = entry.getValue();
-            int assigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
-            
-            // If this zone needs more drones
-            if (assigned < required) {
-                Zone zone = droneManager.getZone(zoneId);
-                if (zone != null && zone.hasFire()) {
-                    String severity = zone.getSeverity();
+        try {
+            timeExecution("checkForPendingFireEvents", () -> {
+                String droneId = drone.getDroneId();
+                log("Checking for pending fire events for " + droneId);
+                
+                // First update all our maps to remove any extinguished fires
+                cleanupExtinguishedFires();
+                
+                // Find the highest priority fire that needs more drones
+                Integer highestPriorityZoneId = null;
+                String highestPrioritySeverity = null;
+                
+                // Get a snapshot to avoid ConcurrentModificationException
+                Map<Integer, Integer> requiredSnapshot = new HashMap<>(fireEventRequiredDrones);
+                
+                log("Checking " + requiredSnapshot.size() + " active fires for assignment");
+                
+                // Look through all fires that need more drones
+                for (Map.Entry<Integer, Integer> entry : requiredSnapshot.entrySet()) {
+                    int zoneId = entry.getKey();
+                    int required = entry.getValue();
+                    int assigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
                     
-                    // If this is our first candidate or has higher severity than current candidate
-                    if (highestPriorityZoneId == null || getSeverityWeight(severity) > getSeverityWeight(highestPrioritySeverity)) {
-                        highestPriorityZoneId = zoneId;
-                        highestPrioritySeverity = severity;
+                    // If this zone needs more drones
+                    if (assigned < required) {
+                        Zone zone = droneManager.getZone(zoneId);
+                        if (zone != null && zone.hasFire()) {
+                            String severity = zone.getSeverity();
+                            int currentWeight = highestPrioritySeverity != null ? 
+                                getSeverityWeight(highestPrioritySeverity) : -1;
+                            int newWeight = getSeverityWeight(severity);
+                            
+                            logVerbose("Zone " + zoneId + ": " + assigned + "/" + required + 
+                                      " drones, severity=" + severity + " (weight=" + newWeight + ")");
+                            
+                            // If this is our first candidate or has higher severity
+                            if (highestPriorityZoneId == null || newWeight > currentWeight) {
+                                highestPriorityZoneId = zoneId;
+                                highestPrioritySeverity = severity;
+                                logVerbose("New highest priority candidate: Zone " + zoneId);
+                            }
+                        }
                     }
                 }
-            }
-        }
-        
-        // If we found a fire that needs drones, dispatch this drone to it
-        if (highestPriorityZoneId != null) {
-            // Create a FireEvent for this zone
-            FireEvent event = createFireEventForZone(highestPriorityZoneId, highestPrioritySeverity);
-            
-            // Send to drone and update tracking
-            if (event != null) {
-                // Update drone status
-                droneManager.updateDroneStatus(drone.getDroneId(), "EnRoute", drone.getCurrentLocation(), event);
                 
-                // Increment assigned drone count
-                int assigned = fireEventAssignedDrones.getOrDefault(highestPriorityZoneId, 0) + 1;
-                fireEventAssignedDrones.put(highestPriorityZoneId, assigned);
-                
-                // Send event to drone
-                sendToDrone(event, drone.getDroneId());
-            }
+                // If we found a fire that needs drones, dispatch this drone to it
+                if (highestPriorityZoneId != null) {
+                    final int zoneId = highestPriorityZoneId;
+                    final String severity = highestPrioritySeverity;
+                    
+                    log("Selected Zone " + zoneId + " (" + severity + 
+                        ") as assignment for " + droneId);
+                    
+                    // Create a FireEvent for this zone
+                    FireEvent event = createFireEventForZone(zoneId, severity);
+                    
+                    // Update tracking atomically
+                    Integer oldCount = fireEventAssignedDrones.get(zoneId);
+                    Integer newCount = (oldCount == null) ? 1 : oldCount + 1;
+                    fireEventAssignedDrones.put(zoneId, newCount);
+                    
+                    log("Updated drone count for Zone " + zoneId + ": " + 
+                        (oldCount != null ? oldCount : 0) + " -> " + newCount);
+                    
+                    // Update drone status
+                    droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), event);
+                    
+                    // Send event to drone
+                    boolean sent = sendToDrone(event, droneId);
+                    
+                    if (sent) {
+                        log("Successfully dispatched " + droneId + " to Zone " + zoneId);
+                        droneAssignmentCount.incrementAndGet();
+                    } else {
+                        log("Failed to send assignment to " + droneId + " for Zone " + zoneId);
+                        // Revert the count increment since assignment failed
+                        fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                            count != null && count > 0 ? count - 1 : null);
+                    }
+                    
+                    // Update visualization
+                    updateVisualization();
+                } else {
+                    log("No suitable fire assignment found for " + droneId);
+                }
+            });
+        } catch (Exception e) {
+            logError("Error checking for pending fire events", e);
         }
     }
     
@@ -340,18 +715,89 @@ public class Scheduler {
      * Removes any tracking for fires that are no longer active
      */
     private void cleanupExtinguishedFires() {
-        List<Integer> toRemove = new ArrayList<>();
-        
-        for (Integer zoneId : fireEventRequiredDrones.keySet()) {
-            Zone zone = droneManager.getZone(zoneId);
-            if (zone == null || !zone.hasFire()) {
-                toRemove.add(zoneId);
-            }
+        try {
+            timeExecution("cleanupExtinguishedFires", () -> {
+                logVerbose("Cleaning up tracking for extinguished fires");
+                
+                // Get a snapshot of current zone IDs to avoid concurrent modification
+                Set<Integer> zoneIds = new HashSet<>(fireEventRequiredDrones.keySet());
+                
+                if (zoneIds.isEmpty()) {
+                    logVerbose("No fires to check for cleanup");
+                    return;
+                }
+                
+                int removedCount = 0;
+                
+                // Check each zone and remove if fire is extinguished
+                for (Integer zoneId : zoneIds) {
+                    Zone zone = droneManager.getZone(zoneId);
+                    if (zone == null || !zone.hasFire()) {
+                        log("Found extinguished fire in Zone " + zoneId + ", cleaning up tracking");
+                        
+                        // Remove from tracking maps
+                        Integer requiredDrones = fireEventRequiredDrones.remove(zoneId);
+                        Integer assignedDrones = fireEventAssignedDrones.remove(zoneId);
+                        
+                        log("Removed Zone " + zoneId + " from tracking (was " + 
+                            assignedDrones + "/" + requiredDrones + " drones)");
+                        
+                        // Also remove from event queue if present
+                        int eventsRemoved = removeFromEventQueue(zoneId);
+                        if (eventsRemoved > 0) {
+                            log("Removed " + eventsRemoved + " queued events for Zone " + zoneId);
+                        }
+                        
+                        removedCount++;
+                    }
+                }
+                
+                if (removedCount > 0) {
+                    log("Cleanup complete - removed " + removedCount + " extinguished fires");
+                } else {
+                    logVerbose("No extinguished fires found during cleanup");
+                }
+            });
+        } catch (Exception e) {
+            logError("Error cleaning up extinguished fires", e);
         }
-        
-        for (Integer zoneId : toRemove) {
-            fireEventRequiredDrones.remove(zoneId);
-            fireEventAssignedDrones.remove(zoneId);
+    }
+    
+    /**
+     * Removes events for a specific zone from the event queue
+     * @return The number of events removed
+     */
+    private int removeFromEventQueue(int zoneId) {
+        try {
+            return timeExecution("removeFromEventQueue", () -> {
+                logVerbose("Removing events for Zone " + zoneId + " from event queue");
+                
+                // Create a temporary list to hold events we want to keep
+                List<FireEvent> eventsToKeep = new ArrayList<>();
+                int removedCount = 0;
+                
+                // Drain the queue
+                FireEvent event;
+                while ((event = eventQueue.poll()) != null) {
+                    if (event.getZoneID() != zoneId) {
+                        eventsToKeep.add(event);
+                    } else {
+                        removedCount++;
+                        logVerbose("Removing queued event: " + event);
+                    }
+                }
+                
+                // Add back events we want to keep
+                if (!eventsToKeep.isEmpty()) {
+                    logVerbose("Re-adding " + eventsToKeep.size() + " events back to queue");
+                    eventQueue.addAll(eventsToKeep);
+                }
+                
+                return removedCount;
+            });
+        } catch (Exception e) {
+            logError("Error removing events from queue", e);
+            return 0;
         }
     }
     
@@ -359,46 +805,54 @@ public class Scheduler {
      * Creates a FireEvent object for a specified zone
      */
     private FireEvent createFireEventForZone(int zoneId, String severity) {
-        // Generate a timestamp
-        String timestamp = String.format("%d", System.currentTimeMillis());
-        
-        // Create a new fire event
-        return new FireEvent(timestamp, zoneId, "FIRE", severity, "NONE");
-    }
-    
-    /**
-     * Helper method to get numeric weight for severity levels
-     */
-    private int getSeverityWeight(String severity) {
-        switch (severity.toLowerCase()) {
-            case "high": return 100;
-            case "moderate": return 50;
-            case "low": return 10;
-            default: return 0;
+        try {
+            return timeExecution("createFireEventForZone", () -> {
+                // Generate a timestamp
+                String timestamp = String.format("%d", System.currentTimeMillis());
+                
+                log("Creating new FireEvent for Zone " + zoneId + 
+                    ", Severity=" + severity + ", Time=" + timestamp);
+                
+                // Create a new fire event
+                FireEvent event = new FireEvent(timestamp, zoneId, "FIRE", severity, "NONE");
+                return event;
+            });
+        } catch (Exception e) {
+            logError("Error creating fire event", e);
+            // Fallback to basic creation without timing
+            String timestamp = String.format("%d", System.currentTimeMillis());
+            return new FireEvent(timestamp, zoneId, "FIRE", severity, "NONE");
         }
     }
 
     /**
-     * Sends a UDP packet to the designated ip and port
-     * @param fire the fire event that is being sent
-     * @param port which port the data should be sent to
-     * @param what a description of what is being sent *ONLY USED FOR DATA LOGGING PURPOSES*
-     * @param location where the data is being sent *ONLY USED FOR DATA LOGGING PURPOSES*
-     *
+     * Sends a UDP packet to the designated IP and port
+     * @param fire the fire event to send
+     * @param port the port to send to
+     * @return true if sending was successful, false otherwise
      */
-    public void send(FireEvent fire, int port, String what, String location) {
-        String message = fire.toString();
-        byte[] msg = message.getBytes();
-
+    public boolean send(FireEvent fire, int port) {
         try {
-            sendPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), port);
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
-        try {
-            sendSocket.send(sendPacket);
-        } catch (IOException e) {
-            e.printStackTrace();
+            return timeExecution("send", () -> {
+                String message = fire.toString();
+                byte[] msg = message.getBytes();
+                log("Sending message to port " + port + ": " + message);
+                
+                try {
+                    DatagramPacket sendPacket = new DatagramPacket(msg, msg.length, 
+                                                                  InetAddress.getLocalHost(), port);
+                    sendSocket.send(sendPacket);
+                    fireSentCount.incrementAndGet();
+                    logVerbose("Message sent successfully, " + msg.length + " bytes");
+                    return true;
+                } catch (IOException e) {
+                    logError("Error sending packet to port " + port, e);
+                    return false;
+                }
+            });
+        } catch (Exception e) {
+            logError("Critical error in send method", e);
+            return false;
         }
     }
 
@@ -407,18 +861,40 @@ public class Scheduler {
      *
      * @param fire The fire event to send
      * @param droneId The ID of the drone to send to
+     * @return true if send was successful, false otherwise
      */
-    public void sendToDrone(FireEvent fire, String droneId) {
-        // Assign this drone to the fire event
-        fire.assignDrone(droneId);
-
-        // Get the port for this drone
-        Integer port = dronePorts.get(droneId);
-        if (port == null) {
-            return;
+    public boolean sendToDrone(FireEvent fire, String droneId) {
+        try {
+            return timeExecution("sendToDrone", () -> {
+                log("Preparing to send fire event to " + droneId);
+                
+                // Assign this drone to the fire event
+                fire.assignDrone(droneId);
+                
+                // Get the port for this drone
+                Integer port = dronePorts.get(droneId);
+                if (port == null) {
+                    log("Error: No port registration found for " + droneId);
+                    return false;
+                }
+                
+                log("Sending fire event to " + droneId + " on port " + port + 
+                   " for Zone " + fire.getZoneID());
+                
+                boolean success = send(fire, port);
+                
+                if (success) {
+                    log("Successfully sent fire event to " + droneId);
+                } else {
+                    log("Failed to send fire event to " + droneId);
+                }
+                
+                return success;
+            });
+        } catch (Exception e) {
+            logError("Error in sendToDrone for " + droneId, e);
+            return false;
         }
-
-        send(fire, port, "fire assignment", "Drone " + droneId);
     }
 
     /**
@@ -428,184 +904,391 @@ public class Scheduler {
      * @return the number of drones to dispatch
      */
     private int getDronesNeededForSeverity(String severity) {
-        switch (severity.toLowerCase()) {
-            case "high":
-                return 3; // 30L total capacity needed - 3 drones with 10L each
-            case "moderate":
-                return 2; // 20L total capacity needed - 2 drones with 10L each
-            case "low":
-            default:
-                return 1; // 10L total capacity needed - 1 drone with 10L
+        try {
+            return timeExecution("getDronesNeededForSeverity", () -> {
+                int dronesNeeded;
+                
+                switch (severity.toLowerCase()) {
+                    case "high":
+                        dronesNeeded = 3; // 30L total capacity needed - 3 drones with 10L each
+                        break;
+                    case "moderate":
+                        dronesNeeded = 2; // 20L total capacity needed - 2 drones with 10L each
+                        break;
+                    case "low":
+                    default:
+                        dronesNeeded = 1; // 10L total capacity needed - 1 drone with 10L
+                        break;
+                }
+                
+                logVerbose("Severity " + severity + " requires " + dronesNeeded + " drones");
+                return dronesNeeded;
+            });
+        } catch (Exception e) {
+            logError("Error calculating drones needed for severity", e);
+            // Default to 1 drone in case of error
+            return 1;
         }
     }
 
     /**
-     * Processes the next fire event in the queue and assigns it to the appropriate number of drones
-     * based on fire severity
+     * Processes the next fire event in the queue and assigns drones
      */
-    public void processNextFireEvent() {
-        if (events.isEmpty()) {
-            return;
-        }
-        
-        FireEvent event = events.peek(); // Don't remove until we find sufficient drones
-        
+    private void processNextFireEvent() {
         try {
-            // Extract event details
-            int zoneId = event.getZoneID();
-            String severity = event.getSeverity();
-            Location zoneLocation = droneManager.getLocationForZone(zoneId);
-            int dronesNeeded = getDronesNeededForSeverity(severity);
-
-            // Update zone fire status BEFORE dispatching drones to fix UI sync issue
-            droneManager.updateZoneFireStatus(event.getZoneID(), true, event.getSeverity());
-            
-            // Update our tracking maps
-            fireEventRequiredDrones.put(zoneId, dronesNeeded);
-            fireEventAssignedDrones.putIfAbsent(zoneId, 0);
-            
-            // Update visualization to show fire before drones start moving
-            if (visualization != null) {
-                visualization.updateVisualization();
-            }
-            
-            // Brief assessment delay before dispatching drones
-            Thread.sleep(1000);
-
-            // Dispatch drones
-            List<DroneStatus> dispatchedDrones = dispatchDronesToFire(event, dronesNeeded);
-
-            // Handle the results of dispatching
-            handleDispatchResults(event, dispatchedDrones, dronesNeeded);
-            
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            timeExecution("processNextFireEvent", () -> {
+                // Get the next event from the queue
+                FireEvent event = eventQueue.poll();
+                if (event == null) {
+                    // If the queue is empty, scan for active fires that need drones
+                    checkActiveFiresForDroneAssignment();
+                    return;
+                }
+                
+                // Extract event details
+                int zoneId = event.getZoneID();
+                String severity = event.getSeverity();
+                log("Processing fire event: Zone=" + zoneId + ", Severity=" + severity + 
+                    ", Time=" + event.getTime());
+                
+                Zone zone = droneManager.getZone(zoneId);
+                
+                // Create zone if it doesn't exist yet
+                if (zone == null) {
+                    Location zoneLocation = new Location(
+                        ((zoneId-1) % 3) * 700 + 350,  // 700m wide zones, centered at x+350
+                        ((zoneId-1) / 3) * 600 + 300); // 600m tall zones, centered at y+300
+                    
+                    zone = droneManager.createZone(zoneId, zoneLocation);
+                    log("Created new Zone " + zoneId + " at location (" + 
+                        zoneLocation.getX() + "," + zoneLocation.getY() + ")");
+                } else {
+                    log("Found existing Zone " + zoneId + " at location (" + 
+                        zone.getLocation().getX() + "," + zone.getLocation().getY() + ")");
+                }
+                
+                // Check if zone already has fire of same or higher severity
+                boolean updateZoneStatus = true;
+                if (zone.hasFire()) {
+                    int currentSeverityWeight = getSeverityWeight(zone.getSeverity());
+                    int newSeverityWeight = getSeverityWeight(severity);
+                    
+                    if (currentSeverityWeight >= newSeverityWeight) {
+                        log("Zone " + zoneId + " already has a " + zone.getSeverity() + 
+                            " severity fire, ignoring " + severity + " event");
+                        updateZoneStatus = false;
+                    } else {
+                        log("Upgrading Zone " + zoneId + " fire severity: " + 
+                            zone.getSeverity() + " -> " + severity);
+                    }
+                } else {
+                    log("Setting Zone " + zoneId + " on fire with severity " + severity);
+                }
+                
+                // Update zone fire status if needed
+                if (updateZoneStatus) {
+                    droneManager.updateZoneFireStatus(zoneId, true, severity);
+                    
+                    // Determine drones needed and track requirements
+                    int dronesNeeded = getDronesNeededForSeverity(severity);
+                    int currentAssigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
+                    int currentRequired = fireEventRequiredDrones.getOrDefault(zoneId, 0);
+                    
+                    if (currentRequired < dronesNeeded) {
+                        // Update required drones if new severity needs more
+                        log("Updating drone requirement for Zone " + zoneId + ": " + 
+                            currentRequired + " -> " + dronesNeeded);
+                        fireEventRequiredDrones.put(zoneId, dronesNeeded);
+                    }
+                    
+                    fireEventAssignedDrones.putIfAbsent(zoneId, 0);
+                    log("Zone " + zoneId + " has " + currentAssigned + "/" + 
+                        dronesNeeded + " drones assigned");
+                }
+                
+                // Update visualization with fire before dispatching drones
+                log("Updating visualization to show fire in Zone " + zoneId);
+                updateVisualization();
+                
+                // Find and dispatch available drones only if we need more
+                if (updateZoneStatus) {
+                    dispatchDronesToFire(event, fireEventRequiredDrones.get(zoneId));
+                }
+                
+                // After processing this event, check other active fires that might need drones
+                checkActiveFiresForDroneAssignment();
+            });
+        } catch (Exception e) {
+            logError("Error processing fire event", e);
+        }
+    }
+    
+    /**
+     * Checks all active fires and assigns available drones to them based on priority
+     */
+    private void checkActiveFiresForDroneAssignment() {
+        try {
+            timeExecution("checkActiveFiresForDroneAssignment", () -> {
+                log("Checking all active fires for drone assignments");
+                
+                // Get all zones with active fires
+                Map<Integer, Zone> zones = droneManager.getAllZones();
+                List<Map.Entry<Integer, Zone>> activeFireZones = zones.entrySet().stream()
+                    .filter(entry -> entry.getValue().hasFire())
+                    .sorted((e1, e2) -> {
+                        // Sort by severity (high to low)
+                        int severityCompare = getSeverityWeight(e2.getValue().getSeverity()) - 
+                                             getSeverityWeight(e1.getValue().getSeverity());
+                        if (severityCompare != 0) return severityCompare;
+                        
+                        // If same severity, sort by which needs more drones proportionally
+                        int zone1 = e1.getKey();
+                        int zone2 = e2.getKey();
+                        int required1 = fireEventRequiredDrones.getOrDefault(zone1, 0);
+                        int required2 = fireEventRequiredDrones.getOrDefault(zone2, 0);
+                        int assigned1 = fireEventAssignedDrones.getOrDefault(zone1, 0);
+                        int assigned2 = fireEventAssignedDrones.getOrDefault(zone2, 0);
+                        
+                        // If required is 0, treat as fully assigned
+                        double ratio1 = required1 == 0 ? 1.0 : (double)assigned1 / required1;
+                        double ratio2 = required2 == 0 ? 1.0 : (double)assigned2 / required2;
+                        
+                        return Double.compare(ratio1, ratio2); // Lower ratio first (needs more drones)
+                    })
+                    .collect(Collectors.toList());
+                
+                if (activeFireZones.isEmpty()) {
+                    logVerbose("No active fires to check");
+                    return;
+                }
+                
+                log("Found " + activeFireZones.size() + " active fires");
+                
+                // Get available drones
+                Collection<DroneStatus> allDrones = droneManager.getAllDrones();
+                List<DroneStatus> availableDrones = allDrones.stream()
+                    .filter(DroneStatus::isAvailable)
+                    .collect(Collectors.toList());
+                
+                if (availableDrones.isEmpty()) {
+                    log("No available drones to assign");
+                    return;
+                }
+                
+                log("Found " + availableDrones.size() + " available drones");
+                
+                // Process each fire zone in priority order
+                for (Map.Entry<Integer, Zone> entry : activeFireZones) {
+                    int zoneId = entry.getKey();
+                    Zone zone = entry.getValue();
+                    String severity = zone.getSeverity();
+                    
+                    int requiredDrones = fireEventRequiredDrones.getOrDefault(zoneId, 0);
+                    int assignedDrones = fireEventAssignedDrones.getOrDefault(zoneId, 0);
+                    int neededDrones = requiredDrones - assignedDrones;
+                    
+                    log("Zone " + zoneId + " (" + severity + ") has " + assignedDrones + "/" + 
+                        requiredDrones + " drones assigned, needs " + neededDrones + " more");
+                    
+                    if (neededDrones <= 0) {
+                        log("Zone " + zoneId + " has enough drones assigned, skipping");
+                        continue;
+                    }
+                    
+                    if (availableDrones.isEmpty()) {
+                        log("No more available drones for assignment");
+                        break;
+                    }
+                    
+                    // Create event for the zone
+                    FireEvent event = createFireEventForZone(zoneId, severity);
+                    
+                    // Dispatch drones to this fire
+                    log("Dispatching drones to Zone " + zoneId);
+                    int dispatched = 0;
+                    Set<String> assignedDroneIds = new HashSet<>();
+                    
+                    for (int i = 0; i < Math.min(neededDrones, availableDrones.size()); i++) {
+                        DroneStatus drone = availableDrones.get(i);
+                        String droneId = drone.getDroneId();
+                        
+                        // Assign drone to fire
+                        log("Assigning " + droneId + " to Zone " + zoneId);
+                        droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), event);
+                        
+                        // Update assigned count
+                        fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                            (count == null) ? 1 : count + 1);
+                            
+                        // Send assignment to drone
+                        boolean sent = sendToDrone(event, droneId);
+                        if (sent) {
+                            dispatched++;
+                            assignedDroneIds.add(droneId);
+                            droneAssignmentCount.incrementAndGet();
+                        } else {
+                            // Revert assignment if send fails
+                            log("Failed to send assignment to " + droneId);
+                            droneManager.updateDroneStatus(droneId, "Idle", drone.getCurrentLocation(), null);
+                            fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                                count != null && count > 0 ? count - 1 : null);
+                        }
+                    }
+                    
+                    // Remove assigned drones from available list
+                    availableDrones.removeIf(drone -> assignedDroneIds.contains(drone.getDroneId()));
+                    
+                    log("Dispatched " + dispatched + " drones to Zone " + zoneId);
+                    
+                    // Update visualization after drone assignments
+                    if (dispatched > 0) {
+                        updateVisualization();
+                    }
+                }
+            });
+        } catch (Exception e) {
+            logError("Error checking active fires for drone assignment", e);
         }
     }
     
     /**
      * Dispatches the required number of drones to a fire event
      */
-    private List<DroneStatus> dispatchDronesToFire(FireEvent event, int dronesNeeded) throws InterruptedException {
-        List<DroneStatus> dispatchedDrones = new ArrayList<>();
-        Set<String> assignedDroneIds = new HashSet<>(); // Track assigned drones
-        int zoneId = event.getZoneID();
-        Location zoneLocation = droneManager.getLocationForZone(zoneId);
-        
-        int currentAssignedCount = fireEventAssignedDrones.getOrDefault(zoneId, 0);
-        int remainingNeeded = dronesNeeded - currentAssignedCount;
-        
-        if (remainingNeeded <= 0) {
-            return dispatchedDrones; // No need to dispatch more
-        }
-        
-        for (int i = 0; i < remainingNeeded; i++) {
-            // Find an available drone
-            DroneStatus drone = findAvailableDrone(event, assignedDroneIds);
-            
-            if (drone != null) {
-                // Process this drone
-                String droneId = drone.getDroneId();
-                dispatchedDrones.add(drone);
-                assignedDroneIds.add(droneId);
+    private void dispatchDronesToFire(FireEvent event, int dronesNeeded) {
+        try {
+            timeExecution("dispatchDronesToFire", () -> {
+                int zoneId = event.getZoneID();
+                Set<String> assignedDroneIds = new HashSet<>();
+                int currentlyAssigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
+                int remainingNeeded = dronesNeeded - currentlyAssigned;
                 
-                // Update tracking count
-                int assigned = fireEventAssignedDrones.getOrDefault(zoneId, 0) + 1;
-                fireEventAssignedDrones.put(zoneId, assigned);
+                log("Zone " + zoneId + " needs " + remainingNeeded + " more drones " +
+                    "(" + currentlyAssigned + "/" + dronesNeeded + " currently assigned)");
                 
-                // Update drone status and send event
-                droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), event);
-                sendToDrone(event, droneId);
-                
-                // Delay between dispatches
-                if (i < remainingNeeded - 1) {
-                    Thread.sleep(4000);
+                if (remainingNeeded <= 0) {
+                    log("Already have enough drones assigned to Zone " + zoneId +
+                        " (" + currentlyAssigned + "/" + dronesNeeded + ")");
+                    return;
                 }
-            } else {
-                break;
-            }
+                
+                int successfulDispatches = 0;
+                
+                // Find drones to dispatch
+                for (int i = 0; i < remainingNeeded; i++) {
+                    log("Looking for drone #" + (i+1) + " of " + remainingNeeded + " needed for Zone " + zoneId);
+                    DroneStatus drone = findAvailableDrone(event, assignedDroneIds);
+                    
+                    if (drone != null) {
+                        // Process this drone
+                        String droneId = drone.getDroneId();
+                        assignedDroneIds.add(droneId);
+                        
+                        log("Found available drone: " + droneId + " for Zone " + zoneId);
+                        
+                        // Update tracking count
+                        Integer oldCount = fireEventAssignedDrones.get(zoneId);
+                        Integer newCount = (oldCount == null) ? 1 : oldCount + 1;
+                        fireEventAssignedDrones.put(zoneId, newCount);
+                        
+                        log("Updated drone count for Zone " + zoneId + ": " + 
+                            (oldCount != null ? oldCount : 0) + " -> " + newCount);
+                        
+                        // Update drone status and send event
+                        droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), event);
+                        
+                        boolean sent = sendToDrone(event, droneId);
+                        if (sent) {
+                            successfulDispatches++;
+                            droneAssignmentCount.incrementAndGet();
+                        } else {
+                            // Revert tracking count if send failed
+                            log("Reverting assignment count for Zone " + zoneId + " due to send failure");
+                            fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                                count != null && count > 0 ? count - 1 : null);
+                        }
+                        
+                        // Small delay between dispatches to prevent network congestion
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            log("Dispatch process interrupted");
+                            break;
+                        }
+                    } else {
+                        log("No more available drones found for Zone " + zoneId);
+                        break;
+                    }
+                }
+                
+                log("Dispatch complete: assigned " + successfulDispatches + 
+                    " drones to Zone " + zoneId);
+                
+                // Update visualization after dispatching
+                if (successfulDispatches > 0) {
+                    updateVisualization();
+                }
+            });
+        } catch (Exception e) {
+            logError("Error dispatching drones to fire", e);
         }
-        
-        return dispatchedDrones;
     }
     
     /**
      * Finds an available drone for a fire event, avoiding duplicates
      */
-    private DroneStatus findAvailableDrone(FireEvent event, Set<String> assignedDroneIds) 
-            throws InterruptedException {
-        final int MAX_ATTEMPTS = 10;
-        int attempts = 0;
-        
-        while (attempts < MAX_ATTEMPTS) {
-            DroneStatus drone = droneManager.selectBestDroneForEvent(event);
-            attempts++;
-            
-            if (drone == null) {
-                return null; // No available drones
-            }
-            
-            if (assignedDroneIds.contains(drone.getDroneId())) {
-                // Already used this drone, try again
-                Thread.sleep(100); // Avoid tight loops
-                continue;
-            }
-            
-            return drone; // Found an available drone
-        }
-        
-        return null; // Couldn't find a suitable drone after max attempts
-    }
-    
-    /**
-     * Handles the results of dispatching drones to a fire
-     */
-    private void handleDispatchResults(FireEvent event, List<DroneStatus> dispatchedDrones, int dronesNeeded) {
-        int zoneId = event.getZoneID();
-        int totalAssigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
-        
-        if (dispatchedDrones.isEmpty() && totalAssigned == 0) {
-            // No drones were available at all
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            return;
-        }
-        
-        // At least one drone dispatched, or some already assigned, consider event handled
-        events.poll(); // Remove event from queue
-        
-        // Update visualization
-        if (visualization != null) {
-            visualization.updateVisualization();
-        }
-    }
-
-    /**
-     * Main entry point for the scheduler
-     */
-    public static void main(String[] args) {
-        try{
-            InetAddress ip = InetAddress.getLocalHost();
-            Scheduler scheduler = new Scheduler(ip);
-
-            // Create separate threads for receiving messages and processing events
-            Thread receiveThread = new Thread(() -> scheduler.receiveMessages());
-            Thread processThread = new Thread(() -> scheduler.processEvents());
-
-            receiveThread.start();
-            processThread.start();
-
-            // Wait for both threads to complete (they won't normally)
-            receiveThread.join();
-            processThread.join();
-
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
+    private DroneStatus findAvailableDrone(FireEvent event, Set<String> assignedDroneIds) {
+        try {
+            return timeExecution("findAvailableDrone", () -> {
+                logVerbose("Looking for available drone for Zone " + event.getZoneID());
+                
+                Collection<DroneStatus> allDrones = droneManager.getAllDrones();
+                logVerbose("Total drones registered: " + allDrones.size());
+                
+                // Count available drones (for logging)
+                long availableDroneCount = allDrones.stream()
+                    .filter(DroneStatus::isAvailable)
+                    .filter(d -> !assignedDroneIds.contains(d.getDroneId()))
+                    .count();
+                
+                if (availableDroneCount == 0) {
+                    logVerbose("No available drones found");
+                    return null;
+                }
+                
+                logVerbose("Available drones: " + availableDroneCount);
+                
+                // Use DroneManager to select best drone
+                DroneStatus selectedDrone = droneManager.selectBestDroneForEvent(event);
+                
+                if (selectedDrone == null) {
+                    logVerbose("DroneManager found no suitable drone");
+                    return null;
+                }
+                
+                String droneId = selectedDrone.getDroneId();
+                
+                // Check if drone is already in the assigned set
+                if (assignedDroneIds.contains(droneId)) {
+                    logVerbose("Selected drone " + droneId + " is already assigned, skipping");
+                    return null;
+                }
+                
+                // Check if drone is still available (could have changed state concurrently)
+                if (!selectedDrone.isAvailable()) {
+                    logVerbose("Selected drone " + droneId + " is no longer available, state=" + 
+                              selectedDrone.getState());
+                    return null;
+                }
+                
+                logVerbose("Selected drone " + droneId + " for Zone " + event.getZoneID() + 
+                          ", location=(" + selectedDrone.getCurrentLocation().getX() + 
+                          "," + selectedDrone.getCurrentLocation().getY() + ")");
+                return selectedDrone;
+            });
         } catch (Exception e) {
-            e.printStackTrace();
+            logError("Error finding available drone", e);
+            return null;
         }
     }
 
@@ -615,30 +1298,114 @@ public class Scheduler {
     private void receiveMessages() {
         try {
             // Initial delay to allow drones to register
-            Thread.sleep(5000); // 5 second delay to wait for drones
-
-            while (true) {
-                // Check for both fire events and drone status updates
+            log("Receive thread starting, waiting 2 seconds for drones to register");
+            Thread.sleep(2000);
+            
+            log("Starting main message receiving loop");
+            // Main message processing loop
+            while (isRunning.get()) {
+                // Attempt to receive a message
                 FireEvent event = receive();
-
-                // If it's a fire event, add it to queue
+                
+                // If we received a fire event, process it
                 if (event != null) {
-                    // Add to queue and send acknowledgement
-                    events.add(event);
-                    send(event, 5001, "response", "Fire Incident system");
+                    // Process the fire event in a worker thread to avoid blocking receive thread
+                    final FireEvent finalEvent = event;
+                    log("Received fire event, submitting to worker pool for processing");
                     
-                    // Update the visual UI if initialized
-                    if (visualization != null) {
-                        visualization.updateVisualization();
-                    }
+                    workerExecutor.submit(() -> {
+                        try {
+                            timeExecution("processIncomingFireEvent", () -> {
+                                log("Processing incoming fire event: Zone=" + finalEvent.getZoneID() + 
+                                    ", Severity=" + finalEvent.getSeverity() + 
+                                    ", Time=" + finalEvent.getTime());
+                                
+                                // Update zone fire status
+                                int zoneId = finalEvent.getZoneID();
+                                String severity = finalEvent.getSeverity();
+                                
+                                // Create or update zone
+                                Zone zone = droneManager.getZone(zoneId);
+                                if (zone == null) {
+                                    Location zoneLocation = new Location(
+                                        ((zoneId-1) % 3) * 700 + 350,
+                                        ((zoneId-1) / 3) * 600 + 300);
+                                    zone = droneManager.createZone(zoneId, zoneLocation);
+                                    log("Created new Zone " + zoneId + " at location (" + 
+                                        zoneLocation.getX() + "," + zoneLocation.getY() + ")");
+                                }
+                                
+                                // Check if zone already has a higher severity fire
+                                boolean updateZoneStatus = true;
+                                if (zone.hasFire()) {
+                                    int currentSeverityWeight = getSeverityWeight(zone.getSeverity());
+                                    int newSeverityWeight = getSeverityWeight(severity);
+                                    
+                                    if (currentSeverityWeight >= newSeverityWeight) {
+                                        log("Zone " + zoneId + " already has a " + zone.getSeverity() + 
+                                            " severity fire, keeping current severity");
+                                        updateZoneStatus = false;
+                                    } else {
+                                        log("Upgrading Zone " + zoneId + " fire severity: " + 
+                                            zone.getSeverity() + " -> " + severity);
+                                    }
+                                } else {
+                                    log("Setting Zone " + zoneId + " on fire with severity " + severity);
+                                }
+                                
+                                // Update zone fire status
+                                if (updateZoneStatus) {
+                                    droneManager.updateZoneFireStatus(zoneId, true, severity);
+                                }
+                                
+                                // Add to priority queue 
+                                eventQueue.add(finalEvent);
+                                log("Added event to priority queue, queue size now: " + eventQueue.size());
+                                
+                                // Track required drones based on severity
+                                int dronesNeeded = getDronesNeededForSeverity(severity);
+                                int currentRequired = fireEventRequiredDrones.getOrDefault(zoneId, 0);
+                                
+                                // Only update if new requirement is higher
+                                if (currentRequired < dronesNeeded) {
+                                    log("Updating drone requirement for Zone " + zoneId + ": " + 
+                                        currentRequired + " -> " + dronesNeeded);
+                                    fireEventRequiredDrones.put(zoneId, dronesNeeded);
+                                }
+                                
+                                // Initialize assigned count if not present
+                                fireEventAssignedDrones.putIfAbsent(zoneId, 0);
+                                
+                                // Send acknowledgement to FireIncidentSubsystem
+                                boolean sent = send(finalEvent, 5001);
+                                if (sent) {
+                                    log("Sent acknowledgement to FireIncidentSubsystem");
+                                } else {
+                                    log("Failed to send acknowledgement to FireIncidentSubsystem");
+                                }
+                                
+                                // Update visualization
+                                updateVisualization();
+                            });
+                        } catch (Exception e) {
+                            logError("Error processing incoming fire event", e);
+                        }
+                    });
                 }
-
-                // Brief pause to prevent tight loop - smaller delay for more responsive UI
-                Thread.sleep(50);
+                
+                // Small pause to prevent tight loop
+                Thread.yield();
             }
+        } catch (InterruptedException e) {
+            log("Receive thread interrupted, shutting down");
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
-            e.printStackTrace();
+            if (isRunning.get()) {
+                logError("Error in receive thread", e);
+            }
         }
+        
+        log("Receive thread terminating");
     }
 
     /**
@@ -646,17 +1413,160 @@ public class Scheduler {
      */
     private void processEvents() {
         try {
-            while (true) {
-                if (!events.isEmpty()) {
+            log("Process thread starting");
+            
+            // Run periodic cleanup
+            scheduledExecutor.scheduleAtFixedRate(() -> {
+                try {
+                    log("Running periodic cleanup of extinguished fires");
+                    cleanupExtinguishedFires();
+                } catch (Exception e) {
+                    logError("Error in periodic cleanup", e);
+                }
+            }, 5, 15, TimeUnit.SECONDS);
+            
+            // Run periodic drone assignment check to ensure fires get drones
+            scheduledExecutor.scheduleAtFixedRate(() -> {
+                try {
+                    log("Running proactive drone assignment check");
+                    if (eventQueue.isEmpty()) {
+                        checkActiveFiresForDroneAssignment();
+                    }
+                } catch (Exception e) {
+                    logError("Error in periodic drone assignment", e);
+                }
+            }, 3, 3, TimeUnit.SECONDS);
+            
+            // Main processing loop
+            while (isRunning.get()) {
+                // Log queue size periodically for debug
+                if (eventQueue.size() > 0) {
+                    logVerbose("Event queue size: " + eventQueue.size());
+                }
+                
+                if (!eventQueue.isEmpty()) {
+                    log("Processing next fire event from queue");
                     // Process fire events and assign drones
                     processNextFireEvent();
                 }
 
                 // Brief pause between processing cycles
-                Thread.sleep(500);
+                Thread.sleep(250);
             }
+        } catch (InterruptedException e) {
+            log("Process thread interrupted, shutting down");
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
+            if (isRunning.get()) {
+                logError("Error in process thread", e);
+            }
+        }
+        
+        log("Process thread terminating");
+    }
+    
+    /**
+     * Shuts down the scheduler and releases resources
+     */
+    public void shutdown() {
+        try {
+            log("Shutting down Scheduler");
+            isRunning.set(false);
+            
+            // Log final statistics before shutdown
+            logSystemState();
+            
+            // Shutdown thread pools
+            log("Shutting down thread pools");
+            scheduledExecutor.shutdownNow();
+            workerExecutor.shutdownNow();
+            
+            try {
+                // Wait briefly for tasks to complete
+                boolean scheduledTerminated = scheduledExecutor.awaitTermination(1, TimeUnit.SECONDS);
+                boolean workerTerminated = workerExecutor.awaitTermination(1, TimeUnit.SECONDS);
+                log("Thread pools terminated: scheduled=" + scheduledTerminated + 
+                    ", worker=" + workerTerminated);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log("Interrupted while waiting for thread pools to terminate");
+            }
+            
+            // Close sockets
+            log("Closing network sockets");
+            if (sendSocket != null && !sendSocket.isClosed()) {
+                sendSocket.close();
+                log("Send socket closed");
+            }
+            
+            if (receiveSocket != null && !receiveSocket.isClosed()) {
+                receiveSocket.close();
+                log("Receive socket closed");
+            }
+            
+            log("Scheduler shutdown complete");
+        } catch (Exception e) {
+            logError("Error during shutdown", e);
+        }
+    }
+
+    /**
+     * Main entry point for the scheduler
+     */
+    public static void main(String[] args) {
+        System.out.println("[SCHEDULER] Starting Scheduler v2.0 with enhanced concurrency");
+        Scheduler scheduler = null;
+        
+        try {
+            // Initialize scheduler
+            InetAddress ip = InetAddress.getLocalHost();
+            scheduler = new Scheduler(ip);
+            
+            // Start processing threads
+            Thread receiveThread = new Thread(scheduler::receiveMessages);
+            Thread processThread = new Thread(scheduler::processEvents);
+            
+            receiveThread.setName("Scheduler-Receive");
+            processThread.setName("Scheduler-Process");
+            
+            receiveThread.setDaemon(false); // Ensure JVM doesn't exit while threads are running
+            processThread.setDaemon(false);
+            
+            System.out.println("[SCHEDULER] Starting receive and process threads");
+            receiveThread.start();
+            processThread.start();
+            
+            // Register shutdown hook for clean termination
+            final Scheduler finalScheduler = scheduler;
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("[SCHEDULER] Shutdown hook triggered, releasing resources");
+                finalScheduler.shutdown();
+            }));
+            
+            System.out.println("[SCHEDULER] Scheduler initialization complete, press Ctrl+C to exit");
+            
+            // Wait for threads to complete (they normally won't)
+            receiveThread.join();
+            processThread.join();
+            
+        } catch (UnknownHostException e) {
+            System.err.println("[SCHEDULER] Error getting localhost: " + e.getMessage());
             e.printStackTrace();
+        } catch (SocketException e) {
+            System.err.println("[SCHEDULER] Error creating sockets: " + e.getMessage());
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            System.err.println("[SCHEDULER] Main thread interrupted: " + e.getMessage());
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            System.err.println("[SCHEDULER] Unexpected error: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            System.out.println("[SCHEDULER] Main thread exiting");
+            // Ensure resources are released
+            if (scheduler != null) {
+                scheduler.shutdown();
+            }
         }
     }
 }

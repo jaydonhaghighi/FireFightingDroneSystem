@@ -159,6 +159,19 @@ public class DroneManager {
     }
     
     /**
+     * Creates a new zone with the specified ID and location
+     * 
+     * @param zoneId the zone identifier
+     * @param location the location of the zone
+     * @return the newly created zone
+     */
+    public Zone createZone(int zoneId, Location location) {
+        Zone zone = new Zone(zoneId, location);
+        zones.put(zoneId, zone);
+        return zone;
+    }
+    
+    /**
      * Updates the fire status of a zone
      * 
      * @param zoneId the zone identifier
@@ -167,17 +180,28 @@ public class DroneManager {
      */
     public void updateZoneFireStatus(int zoneId, boolean hasFire, String severity) {
         Zone zone = zones.get(zoneId);
-        if (zone != null) {
-            zone.setHasFire(hasFire);
-            zone.setSeverity(severity);
+        
+        // Create the zone if it doesn't exist
+        if (zone == null) {
+            Location zoneLocation = new Location(
+                ((zoneId-1) % 3) * 700 + 350,  // 700m wide zones, centered at x+350
+                ((zoneId-1) / 3) * 600 + 300); // 600m tall zones, centered at y+300
             
-            // If a new fire is started, reset the drop count
-            if (hasFire) {
-                zoneDropCounts.put(zoneId, 0);
-            } else {
-                // If fire is being marked as extinguished, remove the drop count
-                zoneDropCounts.remove(zoneId);
-            }
+            zone = createZone(zoneId, zoneLocation);
+            System.out.println("[DRONE MANAGER] Created new Zone " + zoneId + " at location " + 
+                              zoneLocation.getX() + "," + zoneLocation.getY());
+        }
+        
+        // Update fire status
+        zone.setHasFire(hasFire);
+        zone.setSeverity(severity);
+        
+        // If a new fire is started, reset the drop count
+        if (hasFire) {
+            zoneDropCounts.put(zoneId, 0);
+        } else {
+            // If fire is being marked as extinguished, remove the drop count
+            zoneDropCounts.remove(zoneId);
         }
     }
     

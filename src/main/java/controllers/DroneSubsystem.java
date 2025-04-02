@@ -591,13 +591,18 @@ public class DroneSubsystem {
     }
 
     /**
-     * Zone tracking methods
+     * Zone tracking methods with proper synchronization to prevent concurrency issues
      */
-    public static int recordDropForZone(int zoneId) {
-        return zoneDropsMap.compute(zoneId, (key, value) -> (value == null) ? 1 : value + 1);
+    public static synchronized int recordDropForZone(int zoneId) {
+        int currentDrops = zoneDropsMap.getOrDefault(zoneId, 0);
+        int newTotal = currentDrops + 1;
+        zoneDropsMap.put(zoneId, newTotal);
+        System.out.println("[DRONE-DIAGNOSTICS] Recorded drop for Zone " + zoneId + 
+                          ", total now: " + newTotal);
+        return newTotal;
     }
 
-    public static int getDropsForZone(int zoneId) {
+    public static synchronized int getDropsForZone(int zoneId) {
         return zoneDropsMap.getOrDefault(zoneId, 0);
     }
 
@@ -647,6 +652,28 @@ public class DroneSubsystem {
             Location zoneLocation = getZoneLocation(zoneId);
             String severity = event.getSeverity();
             String droneId = drone.getDroneId();
+            
+            System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " received assignment: Zone=" + 
+                              zoneId + ", Severity=" + severity);
+
+            // Check the drop count before starting mission to avoid redundant work
+            int dronesNeeded = getRequiredDronesForSeverity(severity);
+            int currentDrops = getDropsForZone(zoneId);
+            
+            // Check if fire is already extinguished before starting mission
+            if (currentDrops >= dronesNeeded) {
+                System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " cancelling mission to Zone " + 
+                                  zoneId + " as fire is already extinguished (" + 
+                                  currentDrops + "/" + dronesNeeded + " drops)");
+                
+                // Complete mission immediately
+                drone.setCurrentLocation(drone.getBaseLocation());
+                drone.currentEvent = null;
+                drone.setState(new Idle()); // Force state to idle
+                drone.sendStatusUpdate(); // Notify scheduler we're idle
+                System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " mission cancelled, now idle");
+                return;
+            }
 
             // Initialize mission parameters
             drone.setTargetLocation(zoneLocation);
@@ -655,26 +682,63 @@ public class DroneSubsystem {
             Thread.sleep(1000);  // Preparation delay
 
             // Travel to fire location
+            System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " traveling to Zone " + zoneId);
             simulateMovement(drone, zoneLocation);
+            
+            // Check again if fire still needs attention upon arrival
+            currentDrops = getDropsForZone(zoneId);
+            if (currentDrops >= dronesNeeded) {
+                System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " arrived at Zone " + 
+                                  zoneId + " but fire is already extinguished (" + 
+                                  currentDrops + "/" + dronesNeeded + " drops)");
+                
+                // Skip firefighting and return to base immediately
+                System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " returning to base without action");
+                drone.setTargetLocation(drone.getBaseLocation());
+                drone.returningBack();
+                simulateMovement(drone, drone.getBaseLocation());
+                
+                // Complete mission
+                drone.setCurrentLocation(drone.getBaseLocation());
+                Thread.sleep(1000);  // Maintenance time
+                drone.currentEvent = null;
+                drone.taskCompleted();
+                System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " mission complete, now idle");
+                return;
+            }
 
             // Calculate firefighting duration
             int firefightingDuration = calculateFirefightingDuration(severity, drone);
 
             // Drop firefighting agent
+            System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " fighting fire in Zone " + 
+                              zoneId + " for " + (firefightingDuration/1000) + " seconds");
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
             Thread.sleep(firefightingDuration);
 
             // Update fire status
-            int dronesNeeded = getRequiredDronesForSeverity(severity);
-            int dropCount = recordDropForZone(zoneId);
-            boolean isExtinguished = (dropCount >= dronesNeeded);
+            int dropCount;
+            boolean isExtinguished;
             
-            if (isExtinguished) {
-                drone.sendFireExtinguishedStatus(zoneId);
+            // Use synchronized block to atomically check and update drop count
+            synchronized (DroneSubsystem.class) {
+                dropCount = recordDropForZone(zoneId);
+                isExtinguished = (dropCount >= dronesNeeded);
+                
+                System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " fire agent drop complete for Zone " + 
+                                zoneId + ", Drops now: " + dropCount + "/" + dronesNeeded + 
+                                (isExtinguished ? " (FIRE EXTINGUISHED)" : " (still burning)"));
+                
+                // Only the drone that completes the final drop should send the notification
+                if (isExtinguished && dropCount == dronesNeeded) {
+                    drone.sendFireExtinguishedStatus(zoneId);
+                    System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " sent fire extinguished notification for Zone " + zoneId);
+                }
             }
 
             // Return to base
+            System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " returning to base");
             drone.setTargetLocation(drone.getBaseLocation());
             drone.returningBack();
             Thread.sleep(500);
@@ -685,9 +749,11 @@ public class DroneSubsystem {
             Thread.sleep(1000);  // Maintenance time
             drone.currentEvent = null;
             drone.taskCompleted();
+            System.out.println("[DRONE-DIAGNOSTICS] " + droneId + " mission complete, now idle");
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            System.out.println("[DRONE-DIAGNOSTICS] " + drone.getDroneId() + " mission interrupted");
         }
     }
 
@@ -786,7 +852,7 @@ public class DroneSubsystem {
      */
     public static void main(String[] args) {
         try {
-            final int NUM_DRONES = 5;
+            final int NUM_DRONES = 10;
             DroneSpecifications droneSpecs = new DroneSpecifications();
             DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
             Thread[] threads = new Thread[NUM_DRONES];
