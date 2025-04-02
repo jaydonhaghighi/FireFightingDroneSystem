@@ -373,6 +373,14 @@ public class Scheduler {
                              zoneId + " at " + zoneLocation + " (requires " + dronesNeeded + " drones)" + 
                              SchedulerColors.RESET);
             
+            // Update zone fire status BEFORE dispatching drones to fix UI sync issue
+            droneManager.updateZoneFireStatus(event.getZoneID(), true, event.getSeverity());
+            
+            // Update visualization to show fire before drones start moving
+            if (visualization != null) {
+                visualization.updateVisualization();
+            }
+            
             // Brief assessment delay before dispatching drones
             Thread.sleep(1000);
 
@@ -488,9 +496,6 @@ public class Scheduler {
         
         // At least one drone dispatched, consider event handled
         events.poll(); // Remove event from queue
-        
-        // Update zone fire status
-        droneManager.updateZoneFireStatus(event.getZoneID(), true, event.getSeverity());
         
         // Log results
         if (dispatchedDrones.size() < dronesNeeded) {

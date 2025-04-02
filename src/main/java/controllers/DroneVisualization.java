@@ -443,29 +443,27 @@ public class DroneVisualization extends JFrame {
                 g2d.setColor(Color.DARK_GRAY);
                 g2d.drawRect(zoneX, zoneY, zoneWidth, zoneHeight);
                 
-                // Draw zone label
-                g2d.setFont(new Font("Arial", Font.BOLD, 14));
-                g2d.drawString("Zone " + zone.getId(), x - 20, y - 15);
-                g2d.setFont(new Font("Arial", Font.PLAIN, 12));
-                
-                // If zone has a fire, draw it
+                // Draw zone circle
+                int circleSize = 30;
                 if (zone.hasFire()) {
-                    // Draw fire symbol with severity
+                    // For zones with fire, use severity color
                     g2d.setColor(getSeverityColor(zone.getSeverity()));
-                    int fireSize = 30;
-                    g2d.fillOval(x - fireSize/2, y - fireSize/2, fireSize, fireSize);
-                    g2d.setColor(Color.BLACK);
-                    g2d.drawOval(x - fireSize/2, y - fireSize/2, fireSize, fireSize);
-                    
-                    // Add severity label inside fire symbol
-                    g2d.setColor(Color.WHITE);
-                    g2d.setFont(new Font("Arial", Font.BOLD, 10));
-                    FontMetrics fm = g2d.getFontMetrics();
-                    String sevText = zone.getSeverity().substring(0, 1); // First letter of severity
-                    int textWidth = fm.stringWidth(sevText);
-                    g2d.drawString(sevText, x - textWidth/2, y + 4);
-                    g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+                } else {
+                    // For zones without fire, use a neutral gray
+                    g2d.setColor(new Color(200, 200, 200));
                 }
+                g2d.fillOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                g2d.setColor(Color.BLACK);
+                g2d.drawOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                
+                // Add zone ID inside the circle
+                g2d.setColor(Color.WHITE);
+                g2d.setFont(new Font("Arial", Font.BOLD, 12));
+                FontMetrics fm = g2d.getFontMetrics();
+                String zoneText = "Z" + zone.getId();
+                int textWidth = fm.stringWidth(zoneText);
+                g2d.drawString(zoneText, x - textWidth/2, y + 4);
+                g2d.setFont(new Font("Arial", Font.PLAIN, 12));
             }
             
             // Draw base location
