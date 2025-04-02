@@ -16,7 +16,7 @@ public class DroneSpecifications {
      * Creates a new DroneSpecifications with default values
      */
     public DroneSpecifications() {
-        this.maxSpeed = 56.0;        // 56 km/h - standard drone speed
+        this.maxSpeed = 1000.0;        // 56 km/h - standard drone speed
         this.timeToOpenNozzle = 100;  // 100 ms to open nozzle
         this.flowRate = 500.0;          // 500 litres/s flow rate
         this.carryCapacity = 10.0;    // 10 litres total capacity

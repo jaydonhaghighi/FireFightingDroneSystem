@@ -456,7 +456,6 @@ public class DroneSubsystem {
     /**
      * State transition helper method for all state changes
      * @param action The action to perform
-     * @param actionName The name of the action for logging
      */
     private void performStateTransition(StateAction action) {
         System.out.print(ConsoleColors.BOLD_WHITE + "\n[" + droneId.toUpperCase() + 
@@ -908,7 +907,7 @@ public class DroneSubsystem {
      */
     public static void main(String[] args) {
         try {
-            final int NUM_DRONES = 10;
+            final int NUM_DRONES = 5;
             DroneSpecifications droneSpecs = new DroneSpecifications();
             DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
             Thread[] threads = new Thread[NUM_DRONES];

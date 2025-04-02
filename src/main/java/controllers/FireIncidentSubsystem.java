@@ -128,21 +128,7 @@ public class FireIncidentSubsystem {
                 // Add variable delays between fire events to simulate realistic timing
                 try {
                     // Calculate a more realistic delay based on severity
-                    int delaySeconds;
-
-                    switch (severity) {
-                        case "high":
-                            delaySeconds = 6; // High severity fires happen more frequently
-                            break;
-                        case "moderate":
-                            delaySeconds = 10; // Moderate severity fires less frequent
-                            break;
-                        case "low":
-                            delaySeconds = 15; // Low severity fires are most spaced out
-                            break;
-                        default:
-                            delaySeconds = 3; // Default case
-                    }
+                    int delaySeconds = 1;
 
                     // Display countdown to next fire - simplified
                     System.out.println(FireSystemColors.CYAN + "Next fire in " + delaySeconds +
