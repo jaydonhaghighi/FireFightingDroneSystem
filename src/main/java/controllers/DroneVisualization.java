@@ -277,6 +277,32 @@ public class DroneVisualization extends JFrame {
                     zonePanel.add(createBoldLabel("Size:"));
                     zonePanel.add(new JLabel(zone.getWidth() + "m × " + zone.getHeight() + "m"));
                     
+                    // Add drones needed information
+                    int dronesNeeded = getDronesNeededForSeverity(zone.getSeverity());
+                    
+                    // Find assigned drones for this zone
+                    int assignedDrones = 0;
+                    for (DroneStatus drone : droneManager.getAllDrones()) {
+                        FireEvent event = drone.getCurrentTask();
+                        if (event != null && event.getZoneID() == zone.getId()) {
+                            assignedDrones++;
+                        }
+                    }
+                    
+                    int moreDronesNeeded = Math.max(0, dronesNeeded - assignedDrones);
+                    
+                    zonePanel.add(createBoldLabel("Drones:"));
+                    JLabel dronesLabel = new JLabel(assignedDrones + "/" + dronesNeeded + 
+                        (moreDronesNeeded > 0 ? " (" + moreDronesNeeded + " more needed)" : " (sufficient)"));
+                    
+                    if (moreDronesNeeded > 0) {
+                        dronesLabel.setForeground(Color.RED);
+                        dronesLabel.setFont(new Font("Arial", Font.BOLD, 12));
+                    } else {
+                        dronesLabel.setForeground(new Color(0, 128, 0)); // Green
+                    }
+                    zonePanel.add(dronesLabel);
+                    
                     infoPanel.add(zonePanel);
                     infoPanel.add(Box.createVerticalStrut(5));
                 }
@@ -332,6 +358,28 @@ public class DroneVisualization extends JFrame {
                 return new Color(255, 0, 0);
             default:
                 return Color.BLACK;
+        }
+    }
+    
+    /**
+     * Determines how many drones are needed based on fire severity
+     * 
+     * @param severity the fire severity
+     * @return the number of drones needed
+     */
+    private int getDronesNeededForSeverity(String severity) {
+        if (severity == null) return 0;
+        
+        severity = severity.toUpperCase();
+        switch (severity) {
+            case "HIGH":
+                return 3;
+            case "MODERATE":
+                return 2;
+            case "LOW":
+                return 1;
+            default:
+                return 0;
         }
     }
 
@@ -469,21 +517,47 @@ public class DroneVisualization extends JFrame {
                 if (zone.hasFire()) {
                     // For zones with fire, use severity color
                     g2d.setColor(getSeverityColor(zone.getSeverity()));
+                    
+                    // Find assigned drones for this zone
+                    int assignedDrones = 0;
+                    int dronesNeeded = getDronesNeededForSeverity(zone.getSeverity());
+                    
+                    for (DroneStatus drone : drones) {
+                        FireEvent event = drone.getCurrentTask();
+                        if (event != null && event.getZoneID() == zone.getId()) {
+                            assignedDrones++;
+                        }
+                    }
+                    
+                    int moreDronesNeeded = Math.max(0, dronesNeeded - assignedDrones);
+                    
+                    // Fill the circle with the severity color
+                    g2d.fillOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                    g2d.setColor(Color.BLACK);
+                    g2d.drawOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                    
+                    // Add zone ID inside the circle
+                    g2d.setColor(Color.WHITE);
+                    g2d.setFont(new Font("Arial", Font.BOLD, 12));
+                    FontMetrics fm = g2d.getFontMetrics();
+                    String zoneText = "Z" + zone.getId();
+                    int textWidth = fm.stringWidth(zoneText);
+                    g2d.drawString(zoneText, x - textWidth/2, y + 4);
                 } else {
                     // For zones without fire, use a neutral gray
                     g2d.setColor(new Color(200, 200, 200));
+                    g2d.fillOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                    g2d.setColor(Color.BLACK);
+                    g2d.drawOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
+                    
+                    // Add zone ID inside the circle
+                    g2d.setColor(Color.WHITE);
+                    g2d.setFont(new Font("Arial", Font.BOLD, 12));
+                    FontMetrics fm = g2d.getFontMetrics();
+                    String zoneText = "Z" + zone.getId();
+                    int textWidth = fm.stringWidth(zoneText);
+                    g2d.drawString(zoneText, x - textWidth/2, y + 4);
                 }
-                g2d.fillOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
-                g2d.setColor(Color.BLACK);
-                g2d.drawOval(x - circleSize/2, y - circleSize/2, circleSize, circleSize);
-                
-                // Add zone ID inside the circle
-                g2d.setColor(Color.WHITE);
-                g2d.setFont(new Font("Arial", Font.BOLD, 12));
-                FontMetrics fm = g2d.getFontMetrics();
-                String zoneText = "Z" + zone.getId();
-                int textWidth = fm.stringWidth(zoneText);
-                g2d.drawString(zoneText, x - textWidth/2, y + 4);
                 g2d.setFont(new Font("Arial", Font.PLAIN, 12));
             }
             

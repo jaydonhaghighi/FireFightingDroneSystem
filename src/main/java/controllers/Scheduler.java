@@ -42,6 +42,7 @@ public class Scheduler {
     // Fire events tracking with thread-safety
     private final ConcurrentMap<Integer, Integer> fireEventAssignedDrones;
     private final ConcurrentMap<Integer, Integer> fireEventRequiredDrones;
+    private final Set<Integer> fullyAssignedZones = Collections.newSetFromMap(new ConcurrentHashMap<>());
     
     // Thread control
     private final AtomicBoolean isRunning;
@@ -517,6 +518,13 @@ public class Scheduler {
                         fireEventAssignedDrones.put(zoneId, newCount);
                         log("Updated drone count for Zone " + zoneId + ": " + 
                            oldCount + " -> " + newCount);
+                        
+                        // Clear the fully assigned mark if we're now below the threshold
+                        int requiredDrones = fireEventRequiredDrones.getOrDefault(zoneId, 0);
+                        if (newCount < requiredDrones) {
+                            clearZoneFullyAssignedMark(zoneId);
+                            log("Zone " + zoneId + " is no longer fully assigned");
+                        }
                     }
                     
                     currentTask = null; // Clear task when idle
@@ -558,10 +566,38 @@ public class Scheduler {
                     int required = entry.getValue();
                     int assigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
                     
-                    // If this zone needs more drones
+                    // If this zone needs more drones according to our tracking
                     if (assigned < required) {
                         Zone zone = droneManager.getZone(zoneId);
                         if (zone != null && zone.hasFire()) {
+                            // Check if zone is marked as fully assigned
+                            if (isZoneFullyAssigned(zoneId)) {
+                                log("Zone " + zoneId + " is marked as fully assigned, skipping");
+                                continue;
+                            }
+                            
+                            // Double-check the actual required number - it might have changed
+                            int actualRequired = getDronesNeededForSeverity(zone.getSeverity());
+                            
+                            // Do an actual count of drones currently assigned to this zone
+                            // This is more accurate than our tracking which might be out of sync
+                            int actualAssignedCount = 0;
+                            for (DroneStatus currentDrone : droneManager.getAllDrones()) {
+                                FireEvent currentTask = currentDrone.getCurrentTask();
+                                if (currentTask != null && currentTask.getZoneID() == zoneId &&
+                                    !currentDrone.getState().equalsIgnoreCase("IDLE") &&
+                                    !currentDrone.getState().equalsIgnoreCase("Idle")) {
+                                    actualAssignedCount++;
+                                }
+                            }
+                            
+                            // Skip if we already have enough drones based on actual counts
+                            if (actualAssignedCount >= actualRequired) {
+                                log("Zone " + zoneId + " already has enough drones assigned (actual count: " + 
+                                    actualAssignedCount + "/" + actualRequired + "), skipping");
+                                markZoneAsFullyAssigned(zoneId);
+                                continue;
+                            }
                             String severity = zone.getSeverity();
                             int currentWeight = highestPrioritySeverity != null ? 
                                 getSeverityWeight(highestPrioritySeverity) : -1;
@@ -653,6 +689,9 @@ public class Scheduler {
                         // Remove from tracking maps
                         Integer requiredDrones = fireEventRequiredDrones.remove(zoneId);
                         Integer assignedDrones = fireEventAssignedDrones.remove(zoneId);
+                        
+                        // Remove from fully assigned zones set
+                        clearZoneFullyAssignedMark(zoneId);
                         
                         log("Removed Zone " + zoneId + " from tracking (was " + 
                             assignedDrones + "/" + requiredDrones + " drones)");
@@ -845,6 +884,35 @@ public class Scheduler {
             return 1;
         }
     }
+    
+    /**
+     * Marks a zone as fully assigned - it has enough drones to handle the fire
+     * 
+     * @param zoneId the zone ID
+     */
+    private void markZoneAsFullyAssigned(int zoneId) {
+        fullyAssignedZones.add(zoneId);
+        log("Zone " + zoneId + " is now marked as fully assigned");
+    }
+    
+    /**
+     * Checks if a zone is already fully assigned
+     * 
+     * @param zoneId the zone ID
+     * @return true if the zone is fully assigned
+     */
+    private boolean isZoneFullyAssigned(int zoneId) {
+        return fullyAssignedZones.contains(zoneId);
+    }
+    
+    /**
+     * Removes fully assigned mark for a zone
+     * 
+     * @param zoneId the zone ID
+     */
+    private void clearZoneFullyAssignedMark(int zoneId) {
+        fullyAssignedZones.remove(zoneId);
+    }
 
     /**
      * Processes the next fire event in the queue and assigns drones
@@ -998,15 +1066,55 @@ public class Scheduler {
                     Zone zone = entry.getValue();
                     String severity = zone.getSeverity();
                     
-                    int requiredDrones = fireEventRequiredDrones.getOrDefault(zoneId, 0);
-                    int assignedDrones = fireEventAssignedDrones.getOrDefault(zoneId, 0);
+                    // Get the actual number of drones needed based on current severity
+                    int actualDronesNeeded = getDronesNeededForSeverity(severity);
+                    
+                    // Use the stored required value, but make sure it's not more than we actually need
+                    int requiredDrones = Math.min(
+                        fireEventRequiredDrones.getOrDefault(zoneId, 0),
+                        actualDronesNeeded
+                    );
+                    
+                    // Update required drones if our calculation is different
+                    if (requiredDrones != fireEventRequiredDrones.getOrDefault(zoneId, 0)) {
+                        fireEventRequiredDrones.put(zoneId, requiredDrones);
+                    }
+                    
+                    // Do an actual count of drones currently assigned to this zone
+                    // This is more accurate than our tracking which might be out of sync
+                    int actualAssignedCount = 0;
+                    for (DroneStatus currentDrone : allDrones) {
+                        FireEvent currentTask = currentDrone.getCurrentTask();
+                        if (currentTask != null && currentTask.getZoneID() == zoneId && 
+                            !currentDrone.getState().equalsIgnoreCase("IDLE") &&
+                            !currentDrone.getState().equalsIgnoreCase("Idle")) {
+                            actualAssignedCount++;
+                        }
+                    }
+                    
+                    // Update our tracking to match actual count if different
+                    if (actualAssignedCount != fireEventAssignedDrones.getOrDefault(zoneId, 0)) {
+                        log("Updating drone count for Zone " + zoneId + " to match actual count: " + 
+                            fireEventAssignedDrones.getOrDefault(zoneId, 0) + " -> " + actualAssignedCount);
+                        fireEventAssignedDrones.put(zoneId, actualAssignedCount);
+                    }
+                    
+                    int assignedDrones = actualAssignedCount;
                     int neededDrones = requiredDrones - assignedDrones;
+                    
+                    // Check if this zone is already fully assigned or has enough drones
+                    if (isZoneFullyAssigned(zoneId) || assignedDrones >= requiredDrones) {
+                        markZoneAsFullyAssigned(zoneId);
+                        log("Zone " + zoneId + " has sufficient drones or is already marked as fully assigned, skipping");
+                        continue;
+                    }
                     
                     log("Zone " + zoneId + " (" + severity + ") has " + assignedDrones + "/" + 
                         requiredDrones + " drones assigned, needs " + neededDrones + " more");
                     
                     if (neededDrones <= 0) {
                         log("Zone " + zoneId + " has enough drones assigned, skipping");
+                        markZoneAsFullyAssigned(zoneId);
                         continue;
                     }
                     
@@ -1069,20 +1177,64 @@ public class Scheduler {
     /**
      * Dispatches the required number of drones to a fire event
      */
-    private void dispatchDronesToFire(FireEvent event, int dronesNeeded) {
+    private void dispatchDronesToFire(FireEvent event, int requestedDrones) {
         try {
             timeExecution("dispatchDronesToFire", () -> {
                 int zoneId = event.getZoneID();
                 Set<String> assignedDroneIds = new HashSet<>();
-                int currentlyAssigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
-                int remainingNeeded = dronesNeeded - currentlyAssigned;
+                
+                // Do an actual count of drones currently assigned to this zone
+                // This is more accurate than our tracking which might be out of sync
+                int currentlyAssigned = 0;
+                for (DroneStatus currentDrone : droneManager.getAllDrones()) {
+                    FireEvent currentTask = currentDrone.getCurrentTask();
+                    if (currentTask != null && currentTask.getZoneID() == zoneId && 
+                        !currentDrone.getState().equalsIgnoreCase("IDLE") &&
+                        !currentDrone.getState().equalsIgnoreCase("Idle")) {
+                        currentlyAssigned++;
+                        assignedDroneIds.add(currentDrone.getDroneId()); // Track already assigned drones
+                    }
+                }
+                
+                // Update our tracking to match actual count if different
+                if (currentlyAssigned != fireEventAssignedDrones.getOrDefault(zoneId, 0)) {
+                    log("Updating drone count for Zone " + zoneId + " to match actual count: " + 
+                        fireEventAssignedDrones.getOrDefault(zoneId, 0) + " -> " + currentlyAssigned);
+                    fireEventAssignedDrones.put(zoneId, currentlyAssigned);
+                }
+                
+                // Check if zone is already fully assigned
+                if (isZoneFullyAssigned(zoneId)) {
+                    log("Zone " + zoneId + " is marked as fully assigned, skipping dispatch");
+                    return;
+                }
+                
+                // Determine the actual number of drones needed
+                int actualDronesNeeded = requestedDrones;
+                
+                // Get the zone to check its current severity
+                Zone zone = droneManager.getZone(zoneId);
+                if (zone != null && zone.hasFire()) {
+                    // Get the actual number of drones needed based on current severity
+                    int severityBasedDrones = getDronesNeededForSeverity(zone.getSeverity());
+                    // Use the minimum of requested and actual drones needed
+                    actualDronesNeeded = Math.min(requestedDrones, severityBasedDrones);
+                }
+                
+                int remainingNeeded = actualDronesNeeded - currentlyAssigned;
+                
+                // Mark as fully assigned if we already have enough drones
+                if (currentlyAssigned >= actualDronesNeeded) {
+                    markZoneAsFullyAssigned(zoneId);
+                }
                 
                 log("Zone " + zoneId + " needs " + remainingNeeded + " more drones " +
-                    "(" + currentlyAssigned + "/" + dronesNeeded + " currently assigned)");
+                    "(" + currentlyAssigned + "/" + actualDronesNeeded + " currently assigned)");
                 
                 if (remainingNeeded <= 0) {
                     log("Already have enough drones assigned to Zone " + zoneId +
-                        " (" + currentlyAssigned + "/" + dronesNeeded + ")");
+                        " (" + currentlyAssigned + "/" + actualDronesNeeded + ")");
+                    markZoneAsFullyAssigned(zoneId);
                     return;
                 }
                 
