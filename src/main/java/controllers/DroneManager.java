@@ -188,8 +188,6 @@ public class DroneManager {
                 ((zoneId-1) / 3) * 600 + 300); // 600m tall zones, centered at y+300
             
             zone = createZone(zoneId, zoneLocation);
-            System.out.println("[DRONE MANAGER] Created new Zone " + zoneId + " at location " + 
-                              zoneLocation.getX() + "," + zoneLocation.getY());
         }
         
         // Update fire status
@@ -266,13 +264,9 @@ public class DroneManager {
             
         if (availableDrones.isEmpty()) {
             // No available drones found
-            System.out.println("[DRONE MANAGER] No available drones found for Zone " + zoneId);
             return null;
         } else {
             DroneStatus selected = availableDrones.get(0);
-            System.out.println("[DRONE MANAGER] Selected drone " + selected.getDroneId() + 
-                            " (missions: " + selected.getZonesServiced() + 
-                            ", distance: " + selected.distanceTo(fireLocation) + ")");
             return selected;
         }
     }

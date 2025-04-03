@@ -61,50 +61,37 @@ public class Scheduler {
     private final AtomicInteger droneAssignmentCount = new AtomicInteger(0);
     private final AtomicInteger fireExtinguishedCount = new AtomicInteger(0);
     private final ConcurrentMap<String, Long> methodExecutionTimes = new ConcurrentHashMap<>();
-    private final boolean verboseLogging = true; // Set to true for detailed logs
+    private final boolean verboseLogging = false; // Set to false to disable detailed logs
     
     /**
      * Logs a message with the current timestamp and thread information
      */
-    private void log(String message) {
-        String timestamp = timestampFormat.format(new Date());
-        String threadName = Thread.currentThread().getName();
-        System.out.printf("[%s][%s] %s%n", timestamp, threadName, message);
+    protected void log(String message) {
+        // Logging disabled
     }
     
     /**
      * Logs a message if verbose logging is enabled
      */
-    private void logVerbose(String message) {
-        if (verboseLogging) {
-            log(message);
-        }
+    protected void logVerbose(String message) {
+        // Verbose logging disabled
     }
     
     /**
      * Logs error messages
      */
-    private void logError(String message, Throwable e) {
-        String timestamp = timestampFormat.format(new Date());
-        String threadName = Thread.currentThread().getName();
-        System.err.printf("[%s][%s] ERROR: %s - %s%n", timestamp, threadName, message, e.getMessage());
-        if (verboseLogging) {
-            e.printStackTrace();
-        }
+    protected void logError(String message, Throwable e) {
+        // Error logging disabled
     }
     
     /**
      * Utility method to time method execution
      */
     private <T> T timeExecution(String methodName, Callable<T> callable) throws Exception {
-        long startTime = System.nanoTime();
         try {
             return callable.call();
         } finally {
-            long endTime = System.nanoTime();
-            long executionTime = (endTime - startTime) / 1_000_000; // Convert to ms
-            methodExecutionTimes.put(methodName, executionTime);
-            logVerbose("Method [" + methodName + "] took " + executionTime + "ms");
+            // Timing disabled
         }
     }
     
@@ -112,104 +99,32 @@ public class Scheduler {
      * Utility method to time void method execution
      */
     private void timeExecution(String methodName, Runnable runnable) {
-        long startTime = System.nanoTime();
         try {
             runnable.run();
         } finally {
-            long endTime = System.nanoTime();
-            long executionTime = (endTime - startTime) / 1_000_000; // Convert to ms
-            methodExecutionTimes.put(methodName, executionTime);
-            logVerbose("Method [" + methodName + "] took " + executionTime + "ms");
+            // Timing disabled
         }
     }
     
     /**
      * Logs the current state of the system for diagnostics
      */
-    private void logSystemState() {
-        int queueSize = eventQueue.size();
-        int droneCount = droneManager.getAllDrones().size();
-        Map<Integer, Zone> zones = droneManager.getAllZones();
-        int activeFireCount = 0;
-        
-        // Count active fires
-        for (Zone zone : zones.values()) {
-            if (zone.hasFire()) {
-                activeFireCount++;
-            }
-        }
-        
-        StringBuilder state = new StringBuilder("System State: ");
-        state.append("EventQueue=").append(queueSize).append(", ");
-        state.append("Drones=").append(droneCount).append(", ");
-        state.append("ActiveFires=").append(activeFireCount).append(", ");
-        state.append("Stats[Received=").append(messageReceiveCount.get());
-        state.append(", FiresSent=").append(fireSentCount.get());
-        state.append(", DroneAssignments=").append(droneAssignmentCount.get());
-        state.append(", FiresExtinguished=").append(fireExtinguishedCount.get()).append("]");
-        
-        log(state.toString());
-        
-        // If verbose, log detailed drone status
-        if (verboseLogging) {
-            logDroneStatuses();
-            logActiveFiresDetail();
-        }
+    protected void logSystemState() {
+        // System state logging disabled
     }
     
     /**
      * Logs detailed status of each drone
      */
-    private void logDroneStatuses() {
-        Collection<DroneStatus> drones = droneManager.getAllDrones();
-        if (drones.isEmpty()) {
-            logVerbose("No drones registered yet");
-            return;
-        }
-        
-        StringBuilder droneLog = new StringBuilder("Drone Statuses:\n");
-        for (DroneStatus drone : drones) {
-            droneLog.append("  - ").append(drone.getDroneId())
-                   .append(" [State=").append(drone.getState())
-                   .append(", Location=(").append(drone.getCurrentLocation().getX())
-                   .append(",").append(drone.getCurrentLocation().getY()).append(")")
-                   .append(", Task=").append(drone.getCurrentTask() != null ? 
-                          "Zone" + drone.getCurrentTask().getZoneID() : "None")
-                   .append("]\n");
-        }
-        logVerbose(droneLog.toString());
+    protected void logDroneStatuses() {
+        // Drone status logging disabled
     }
     
     /**
      * Logs details about active fires
      */
-    private void logActiveFiresDetail() {
-        Map<Integer, Zone> zones = droneManager.getAllZones();
-        StringBuilder fireLog = new StringBuilder("Active Fires:\n");
-        boolean hasActiveFires = false;
-        
-        for (Map.Entry<Integer, Zone> entry : zones.entrySet()) {
-            Zone zone = entry.getValue();
-            if (zone.hasFire()) {
-                hasActiveFires = true;
-                int zoneId = entry.getKey();
-                int required = fireEventRequiredDrones.getOrDefault(zoneId, 0);
-                int assigned = fireEventAssignedDrones.getOrDefault(zoneId, 0);
-                
-                fireLog.append("  - Zone").append(zoneId)
-                       .append(" [Severity=").append(zone.getSeverity())
-                       .append(", Location=(").append(zone.getLocation().getX())
-                       .append(",").append(zone.getLocation().getY()).append(")")
-                       .append(", Drones=").append(assigned).append("/").append(required)
-                       .append("]\n");
-            }
-        }
-        
-        if (!hasActiveFires) {
-            fireLog.append("  No active fires\n");
-        }
-        
-        logVerbose(fireLog.toString());
+    protected void logActiveFiresDetail() {
+        // Fire details logging disabled
     }
 
     /**
@@ -1298,10 +1213,8 @@ public class Scheduler {
     private void receiveMessages() {
         try {
             // Initial delay to allow drones to register
-            log("Receive thread starting, waiting 2 seconds for drones to register");
             Thread.sleep(2000);
             
-            log("Starting main message receiving loop");
             // Main message processing loop
             while (isRunning.get()) {
                 // Attempt to receive a message
@@ -1311,14 +1224,10 @@ public class Scheduler {
                 if (event != null) {
                     // Process the fire event in a worker thread to avoid blocking receive thread
                     final FireEvent finalEvent = event;
-                    log("Received fire event, submitting to worker pool for processing");
                     
                     workerExecutor.submit(() -> {
                         try {
                             timeExecution("processIncomingFireEvent", () -> {
-                                log("Processing incoming fire event: Zone=" + finalEvent.getZoneID() + 
-                                    ", Severity=" + finalEvent.getSeverity() + 
-                                    ", Time=" + finalEvent.getTime());
                                 
                                 // Update zone fire status
                                 int zoneId = finalEvent.getZoneID();
@@ -1514,13 +1423,26 @@ public class Scheduler {
      * Main entry point for the scheduler
      */
     public static void main(String[] args) {
-        System.out.println("[SCHEDULER] Starting Scheduler v2.0 with enhanced concurrency");
         Scheduler scheduler = null;
         
         try {
-            // Initialize scheduler
+            // Initialize scheduler with all logging disabled
             InetAddress ip = InetAddress.getLocalHost();
-            scheduler = new Scheduler(ip);
+            scheduler = new Scheduler(ip) {
+                // Override all log methods to do nothing
+                @Override
+                protected void log(String message) {}
+                @Override
+                protected void logVerbose(String message) {}
+                @Override
+                protected void logError(String message, Throwable e) {}
+                @Override
+                protected void logSystemState() {}
+                @Override
+                protected void logDroneStatuses() {}
+                @Override
+                protected void logActiveFiresDetail() {}
+            };
             
             // Start processing threads
             Thread receiveThread = new Thread(scheduler::receiveMessages);
@@ -1532,37 +1454,28 @@ public class Scheduler {
             receiveThread.setDaemon(false); // Ensure JVM doesn't exit while threads are running
             processThread.setDaemon(false);
             
-            System.out.println("[SCHEDULER] Starting receive and process threads");
             receiveThread.start();
             processThread.start();
             
             // Register shutdown hook for clean termination
             final Scheduler finalScheduler = scheduler;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                System.out.println("[SCHEDULER] Shutdown hook triggered, releasing resources");
                 finalScheduler.shutdown();
             }));
-            
-            System.out.println("[SCHEDULER] Scheduler initialization complete, press Ctrl+C to exit");
             
             // Wait for threads to complete (they normally won't)
             receiveThread.join();
             processThread.join();
             
         } catch (UnknownHostException e) {
-            System.err.println("[SCHEDULER] Error getting localhost: " + e.getMessage());
-            e.printStackTrace();
+            // Handle silently
         } catch (SocketException e) {
-            System.err.println("[SCHEDULER] Error creating sockets: " + e.getMessage());
-            e.printStackTrace();
+            // Handle silently
         } catch (InterruptedException e) {
-            System.err.println("[SCHEDULER] Main thread interrupted: " + e.getMessage());
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            System.err.println("[SCHEDULER] Unexpected error: " + e.getMessage());
-            e.printStackTrace();
+            // Handle silently
         } finally {
-            System.out.println("[SCHEDULER] Main thread exiting");
             // Ensure resources are released
             if (scheduler != null) {
                 scheduler.shutdown();

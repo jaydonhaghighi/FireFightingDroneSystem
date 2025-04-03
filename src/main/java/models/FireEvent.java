@@ -109,7 +109,6 @@ public class FireEvent {
         
         // Make sure we're not adding the same drone multiple times
         if (this.assignedDrones.contains(droneId)) {
-            System.out.println("[FireEvent] Warning: Drone " + droneId + " already assigned to event for Zone " + zoneID);
         } else {
             this.assignedDrones.add(droneId); // Add to the set of all assigned drones
         }
