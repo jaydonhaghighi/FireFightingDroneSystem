@@ -268,6 +268,27 @@ public class Scheduler {
                         return null;
                     }
     
+                    // Check if this is a zone info request from DroneSubsystem
+                    if (message.startsWith("ZONE_INFO_REQUEST:")) {
+                        log("Message identified as zone information request");
+                        String[] parts = message.split(":");
+                        if (parts.length >= 2) {
+                            try {
+                                int zoneId = Integer.parseInt(parts[1]);
+                                Zone zone = droneManager.getZone(zoneId);
+                                if (zone != null) {
+                                    Location center = zone.getLocation();
+                                    String response = "ZONE_INFO:" + zoneId + ":" + center.getX() + ":" + center.getY();
+                                    send(response, receivePacket.getPort(), sender);
+                                    log("Sent zone info for zone " + zoneId + " to port " + receivePacket.getPort());
+                                }
+                            } catch (NumberFormatException e) {
+                                log("Invalid zone ID in request: " + message);
+                            }
+                        }
+                        return null;
+                    }
+
                     // Try to parse as a FireEvent
                     log("Message identified as fire event, parsing...");
                     FireEvent event = createFireEventFromString(message);
@@ -806,6 +827,35 @@ public class Scheduler {
             });
         } catch (Exception e) {
             logError("Critical error in send method", e);
+            return false;
+        }
+    }
+    
+    /**
+     * Sends a string message to the designated IP and port
+     * @param message the message to send
+     * @param port the port to send to
+     * @param ip the IP address to send to
+     * @return true if sending was successful, false otherwise
+     */
+    public boolean send(String message, int port, InetAddress ip) {
+        try {
+            return timeExecution("sendString", () -> {
+                byte[] msg = message.getBytes();
+                log("Sending string message to " + ip + ":" + port + ": " + message);
+                
+                try {
+                    DatagramPacket sendPacket = new DatagramPacket(msg, msg.length, ip, port);
+                    sendSocket.send(sendPacket);
+                    logVerbose("Message sent successfully, " + msg.length + " bytes");
+                    return true;
+                } catch (IOException e) {
+                    logError("Error sending packet to " + ip + ":" + port, e);
+                    return false;
+                }
+            });
+        } catch (Exception e) {
+            logError("Critical error in sendString method", e);
             return false;
         }
     }

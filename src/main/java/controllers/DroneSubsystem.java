@@ -758,11 +758,45 @@ public class DroneSubsystem {
 
     /**
      * Get zone location from zone ID
+     * 
+     * Note: This method attempts to get the correct zone center by communicating with the scheduler,
+     * which will connect to DroneManager for the actual zone data. If communication fails,
+     * it falls back to a hardcoded calculation.
      */
     private static Location getZoneLocation(int zoneId) {
-        // Create a grid of 700m x 600m zones (3 columns, 4 rows)
+        try {
+            // First try to get zone center from the scheduler
+            // Send a request to the scheduler asking for zone coordinates
+            String request = "ZONE_INFO_REQUEST:" + zoneId;
+            byte[] msg = request.getBytes();
+            DatagramPacket requestPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), 6001);
+            DatagramSocket tempSocket = new DatagramSocket();
+            tempSocket.setSoTimeout(1000); // Wait up to 1 second for response
+            tempSocket.send(requestPacket);
+            
+            // Wait for response
+            byte[] buffer = new byte[100];
+            DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
+            tempSocket.receive(responsePacket);
+            tempSocket.close();
+            
+            String response = new String(buffer, 0, responsePacket.getLength());
+            if (response.startsWith("ZONE_INFO:")) {
+                String[] parts = response.split(":");
+                if (parts.length >= 4) {
+                    int x = Integer.parseInt(parts[2]);
+                    int y = Integer.parseInt(parts[3]);
+                    return new Location(x, y);
+                }
+            }
+        } catch (Exception e) {
+            // If any error occurs, fall back to hardcoded calculation
+        }
+        
+        // Fallback to hardcoded calculation if communication fails
+        // Use actual zone dimensions from zones.txt: 700x500 for columns 1-3
         int x = ((zoneId-1) % 3) * 700 + 350; // 700m wide zones, centered at x+350
-        int y = ((zoneId-1) / 3) * 600 + 300; // 600m tall zones, centered at y+300
+        int y = ((zoneId-1) / 3) * 500 + 250; // 500m tall zones, centered at y+250
         return new Location(x, y);
     }
 
