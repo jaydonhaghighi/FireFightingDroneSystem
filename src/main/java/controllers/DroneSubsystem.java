@@ -643,13 +643,12 @@ public class DroneSubsystem {
     /**
      * Process a fire event with the complete firefighting sequence
      */
-    private static void processEvent(DroneSubsystem drone, FireEvent event) {
-        try {
-            // Setup phase
-            int zoneId = event.getZoneID();
-            Location zoneLocation = getZoneLocation(zoneId);
-            String severity = event.getSeverity();
-            String droneId = drone.getDroneId();
+    private static void processEvent(DroneSubsystem drone, FireEvent event) throws InterruptedException {
+        // Setup phase
+        int zoneId = event.getZoneID();
+        Location zoneLocation = getZoneLocation(zoneId);
+        String severity = event.getSeverity();
+        String droneId = drone.getDroneId();
             
 
             // Check the drop count before starting mission to avoid redundant work
@@ -671,7 +670,6 @@ public class DroneSubsystem {
             drone.setTargetLocation(zoneLocation);
             drone.currentEvent = event;
             drone.scheduleFireEvent(event);
-            Thread.sleep(1000);  // Preparation delay
 
             // Travel to fire location
             simulateMovement(drone, zoneLocation);
@@ -687,7 +685,6 @@ public class DroneSubsystem {
                 
                 // Complete mission
                 drone.setCurrentLocation(drone.getBaseLocation());
-                Thread.sleep(1000);  // Maintenance time
                 drone.currentEvent = null;
                 drone.taskCompleted();
                 return;
@@ -699,7 +696,6 @@ public class DroneSubsystem {
             // Drop firefighting agent
             drone.setCurrentLocation(zoneLocation);
             drone.dropAgent();
-            Thread.sleep(firefightingDuration);
 
             // Update fire status
             int dropCount;
@@ -720,18 +716,13 @@ public class DroneSubsystem {
             // Return to base
             drone.setTargetLocation(drone.getBaseLocation());
             drone.returningBack();
-            Thread.sleep(500);
             simulateMovement(drone, drone.getBaseLocation());
 
             // Complete mission
             drone.setCurrentLocation(drone.getBaseLocation());
-            Thread.sleep(1000);  // Maintenance time
             drone.currentEvent = null;
             drone.taskCompleted();
             
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     /**
@@ -803,8 +794,7 @@ public class DroneSubsystem {
     /**
      * Simulate drone movement with visualization
      */
-    private static void simulateMovement(DroneSubsystem drone, Location targetLocation) 
-            throws InterruptedException {
+    private static void simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
         Location currentLocation = drone.getCurrentLocation();
         int distance = currentLocation.distanceTo(targetLocation);
         boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");

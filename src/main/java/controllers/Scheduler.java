@@ -1324,14 +1324,8 @@ public class Scheduler {
                                 count != null && count > 0 ? count - 1 : null);
                         }
                         
-                        // Small delay between dispatches to prevent network congestion
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            log("Dispatch process interrupted");
-                            break;
-                        }
+                        // Yield to prevent excessive CPU usage
+                        Thread.yield();
                     } else {
                         log("No more available drones found for Zone " + zoneId);
                         break;
@@ -1413,12 +1407,8 @@ public class Scheduler {
      * Thread function for receiving messages
      */
     private void receiveMessages() {
-        try {
-            // Initial delay to allow drones to register
-            Thread.sleep(2000);
-            
-            // Main message processing loop
-            while (isRunning.get()) {
+        // Main message processing loop
+        while (isRunning.get()) {
                 // Attempt to receive a message
                 FireEvent event = receive();
                 
@@ -1507,15 +1497,6 @@ public class Scheduler {
                 // Small pause to prevent tight loop
                 Thread.yield();
             }
-        } catch (InterruptedException e) {
-            log("Receive thread interrupted, shutting down");
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            if (isRunning.get()) {
-                logError("Error in receive thread", e);
-            }
-        }
-        
         log("Receive thread terminating");
     }
 
@@ -1523,12 +1504,11 @@ public class Scheduler {
      * Thread function for processing events and assigning to drones
      */
     private void processEvents() {
-        try {
-            log("Process thread starting");
-            
-            // Run periodic cleanup
-            scheduledExecutor.scheduleAtFixedRate(() -> {
-                try {
+        log("Process thread starting");
+        
+        // Run periodic cleanup
+        scheduledExecutor.scheduleAtFixedRate(() -> {
+            try {
                     log("Running periodic cleanup of extinguished fires");
                     cleanupExtinguishedFires();
                 } catch (Exception e) {
@@ -1548,29 +1528,21 @@ public class Scheduler {
                 }
             }, 3, 3, TimeUnit.SECONDS);
             
-            // Main processing loop
-            while (isRunning.get()) {
-                // Log queue size periodically for debug
-                if (eventQueue.size() > 0) {
-                    logVerbose("Event queue size: " + eventQueue.size());
-                }
-                
-                if (!eventQueue.isEmpty()) {
-                    log("Processing next fire event from queue");
-                    // Process fire events and assign drones
-                    processNextFireEvent();
-                }
+        // Main processing loop
+        while (isRunning.get()) {
+            // Log queue size periodically for debug
+            if (eventQueue.size() > 0) {
+                logVerbose("Event queue size: " + eventQueue.size());
+            }
+            
+            if (!eventQueue.isEmpty()) {
+                log("Processing next fire event from queue");
+                // Process fire events and assign drones
+                processNextFireEvent();
+            }
 
-                // Brief pause between processing cycles
-                Thread.sleep(250);
-            }
-        } catch (InterruptedException e) {
-            log("Process thread interrupted, shutting down");
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            if (isRunning.get()) {
-                logError("Error in process thread", e);
-            }
+            // Brief pause between processing cycles
+            Thread.yield();
         }
         
         log("Process thread terminating");
