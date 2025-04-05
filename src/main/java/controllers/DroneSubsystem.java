@@ -18,35 +18,12 @@ import static models.FireEvent.createFireEventFromString;
  * Interface for different states of the drone
  */
 interface DroneState {
-    /**
-     * Handle a fire event
-     */
-    void handleFireEvent(DroneSubsystem context, FireEvent event);
-    
-    /**
-     * Handle dropping fire-fighting agent
-     */
-    void dropAgent(DroneSubsystem context);
-    
-    /**
-     * Handle returning to base
-     */
-    void returningBack(DroneSubsystem context);
-
-    /**
-     * Handle drone fault conditions
-     */
-    void droneFaulted(DroneSubsystem context);
-
-    /**
-     * Handle task completion
-     */
-    void taskCompleted(DroneSubsystem context);
-
-    /**
-     * Display the current state
-     */
-    void displayState();
+    // Default implementations for all methods - do nothing by default
+    default void handleFireEvent(DroneSubsystem context, FireEvent event) {}
+    default void dropAgent(DroneSubsystem context) {}
+    default void returningBack(DroneSubsystem context) {}
+    default void droneFaulted(DroneSubsystem context) {}
+    default void taskCompleted(DroneSubsystem context) {}
 }
 
 /**
@@ -57,31 +34,6 @@ class Idle implements DroneState {
     public void handleFireEvent(DroneSubsystem context, FireEvent event) {
         context.setState(new EnRoute());
     }
-
-    @Override
-    public void dropAgent(DroneSubsystem context) {
-        // Nothing to do in idle state
-    }
-
-    @Override
-    public void returningBack(DroneSubsystem context) {
-        // Already at base
-    }
-
-    @Override
-    public void droneFaulted(DroneSubsystem context) {
-        // No fault handling needed in idle state
-    }
-
-    @Override
-    public void taskCompleted(DroneSubsystem context) {
-        // No task to complete
-    }
-
-    @Override
-    public void displayState() {
-        // State display removed
-    }
 }
 
 /**
@@ -89,33 +41,8 @@ class Idle implements DroneState {
  */
 class EnRoute implements DroneState {
     @Override
-    public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        // Already handling an event
-    }
-
-    @Override
     public void dropAgent(DroneSubsystem context) {
         context.setState(new DroppingAgent());
-    }
-
-    @Override
-    public void returningBack(DroneSubsystem context) {
-        // Not ready to return yet
-    }
-
-    @Override
-    public void droneFaulted(DroneSubsystem context) {
-        // Fault handling
-    }
-
-    @Override
-    public void taskCompleted(DroneSubsystem context) {
-        // Task not complete yet
-    }
-
-    @Override
-    public void displayState() {
-        // State display removed
     }
 }
 
@@ -124,33 +51,8 @@ class EnRoute implements DroneState {
  */
 class DroppingAgent implements DroneState {
     @Override
-    public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        // Already handling an event
-    }
-
-    @Override
-    public void dropAgent(DroneSubsystem context) {
-        // Already dropping agent
-    }
-
-    @Override
     public void returningBack(DroneSubsystem context) {
         context.setState(new ArrivedToBase());
-    }
-
-    @Override
-    public void droneFaulted(DroneSubsystem context) {
-        // Fault handling
-    }
-
-    @Override
-    public void taskCompleted(DroneSubsystem context) {
-        // Task not complete yet
-    }
-
-    @Override
-    public void displayState() {
-        // State display removed
     }
 }
 
@@ -159,33 +61,13 @@ class DroppingAgent implements DroneState {
  */
 class ArrivedToBase implements DroneState {
     @Override
-    public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        // Cannot accept new tasks until maintenance is complete
-    }
-
-    @Override
-    public void dropAgent(DroneSubsystem context) {
-        // Already dropped agent
-    }
-
-    @Override
-    public void returningBack(DroneSubsystem context) {
-        // Already at base
-    }
-
-    @Override
     public void droneFaulted(DroneSubsystem context) {
         context.setState(new Fault());
     }
-
+    
     @Override
     public void taskCompleted(DroneSubsystem context) {
         context.setState(new Idle());
-    }
-
-    @Override
-    public void displayState() {
-        // State display removed
     }
 }
 
@@ -194,33 +76,8 @@ class ArrivedToBase implements DroneState {
  */
 class Fault implements DroneState {
     @Override
-    public void handleFireEvent(DroneSubsystem context, FireEvent event) {
-        // Cannot handle events while faulted
-    }
-
-    @Override
-    public void dropAgent(DroneSubsystem context) {
-        // Cannot drop agent while faulted
-    }
-
-    @Override
-    public void returningBack(DroneSubsystem context) {
-        // Cannot return while faulted
-    }
-
-    @Override
-    public void droneFaulted(DroneSubsystem context) {
-        // Already faulted
-    }
-
-    @Override
     public void taskCompleted(DroneSubsystem context) {
         context.setState(new Idle());  // Maintenance complete, return to idle
-    }
-
-    @Override
-    public void displayState() {
-        // State display removed
     }
 }
 
@@ -256,25 +113,7 @@ public class DroneSubsystem {
     private final int receivePort = 7001;
 
     /**
-     * Basic constructor with default values
-     * @param serverIP The IP address of the scheduler server
-     */
-    public DroneSubsystem(InetAddress serverIP) {
-        this(serverIP, "drone1", new Location(0, 0));
-    }
-
-    /**
-     * Constructor with drone ID and base location
-     * @param serverIP The IP address of the scheduler server
-     * @param droneId The unique identifier for this drone
-     * @param baseLocation The location of the drone's home base
-     */
-    public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation) {
-        this(serverIP, droneId, baseLocation, new DroneSpecifications());
-    }
-
-    /**
-     * Full constructor with all parameters
+     * Constructor with all required parameters
      * @param serverIP The IP address of the scheduler server
      * @param droneId The unique identifier for this drone
      * @param baseLocation The location of the drone's home base
@@ -294,17 +133,24 @@ public class DroneSubsystem {
     }
     
     /**
+     * Constructor with default specifications
+     */
+    public DroneSubsystem(InetAddress serverIP, String droneId, Location baseLocation) {
+        this(serverIP, droneId, baseLocation, new DroneSpecifications());
+    }
+    
+    /**
      * Initialize network sockets for communication
      */
     private void initializeNetworking() {
         try {
-            // Create unique ports for each drone based on drone ID
+            // Extract drone number from ID for unique port assignment
             int droneNumber = 0;
             if (droneId.length() > 5) {
                 droneNumber = Integer.parseInt(droneId.substring(5));
             }
             
-            // Use offset to ensure unique ports
+            // Create uniquely offset ports for each drone
             int uniqueSendPort = sendPort + (droneNumber * 100);
             int uniqueReceivePort = receivePort + (droneNumber * 100);
             
@@ -353,28 +199,8 @@ public class DroneSubsystem {
      * Sends a status update to the scheduler
      */
     public void sendStatusUpdate() {
-        // Build status message with error and task info if applicable
-        String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
-        String taskInfo = buildTaskInfo();
-        
-        String status = droneId + " " +
-                currentState.getClass().getSimpleName() + errorInfo + taskInfo + " " +
-                currentLocation.getX() + " " +
-                currentLocation.getY();
-        send(status, 6001); // Send to scheduler
-    }
-    
-    /**
-     * Builds the task information part of the status message
-     */
-    private String buildTaskInfo() {
-        if (currentEvent != null) {
-            return " TASK:" + currentEvent.getZoneID() + ":" + currentEvent.getSeverity();
-        } else if (fireEventQueue.peek() != null) {
-            FireEvent event = fireEventQueue.peek();
-            return " TASK:" + event.getZoneID() + ":" + event.getSeverity();
-        }
-        return "";
+        String status = buildStatusMessage("");
+        send(status, 6001);
     }
     
     /**
@@ -382,14 +208,31 @@ public class DroneSubsystem {
      * @param zoneId The zone ID where fire was extinguished
      */
     public void sendFireExtinguishedStatus(int zoneId) {
-        String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
-        String fireOutInfo = " FIRE_OUT:" + zoneId;
-        
-        String status = droneId + " " +
-                currentState.getClass().getSimpleName() + errorInfo + fireOutInfo + " " +
-                currentLocation.getX() + " " +
-                currentLocation.getY();
+        String status = buildStatusMessage(" FIRE_OUT:" + zoneId);
         send(status, 6001);
+    }
+    
+    /**
+     * Builds a status message with the given additional info
+     */
+    private String buildStatusMessage(String additionalInfo) {
+        String errorInfo = hasError() ? " ERROR:" + getCurrentError() : "";
+        String taskInfo = "";
+        
+        if (currentEvent != null) {
+            taskInfo = " TASK:" + currentEvent.getZoneID() + ":" + currentEvent.getSeverity();
+        } else if (fireEventQueue.peek() != null) {
+            FireEvent event = fireEventQueue.peek();
+            taskInfo = " TASK:" + event.getZoneID() + ":" + event.getSeverity();
+        }
+        
+        return droneId + " " +
+               currentState.getClass().getSimpleName() + 
+               errorInfo + 
+               taskInfo + 
+               additionalInfo + " " +
+               currentLocation.getX() + " " +
+               currentLocation.getY();
     }
 
     /**
@@ -644,85 +487,62 @@ public class DroneSubsystem {
      * Process a fire event with the complete firefighting sequence
      */
     private static void processEvent(DroneSubsystem drone, FireEvent event) throws InterruptedException {
-        // Setup phase
         int zoneId = event.getZoneID();
         Location zoneLocation = getZoneLocation(zoneId);
         String severity = event.getSeverity();
-        String droneId = drone.getDroneId();
-            
-
-            // Check the drop count before starting mission to avoid redundant work
-            int dronesNeeded = getRequiredDronesForSeverity(severity);
-            int currentDrops = getDropsForZone(zoneId);
-            
-            // Check if fire is already extinguished before starting mission
-            if (currentDrops >= dronesNeeded) {
-                
-                // Complete mission immediately
-                drone.setCurrentLocation(drone.getBaseLocation());
-                drone.currentEvent = null;
-                drone.setState(new Idle()); // Force state to idle
-                drone.sendStatusUpdate(); // Notify scheduler we're idle
-                return;
-            }
-
-            // Initialize mission parameters
-            drone.setTargetLocation(zoneLocation);
-            drone.currentEvent = event;
-            drone.scheduleFireEvent(event);
-
-            // Travel to fire location
-            simulateMovement(drone, zoneLocation);
-            
-            // Check again if fire still needs attention upon arrival
-            currentDrops = getDropsForZone(zoneId);
-            if (currentDrops >= dronesNeeded) {
-                
-                // Skip firefighting and return to base immediately
-                drone.setTargetLocation(drone.getBaseLocation());
-                drone.returningBack();
-                simulateMovement(drone, drone.getBaseLocation());
-                
-                // Complete mission
-                drone.setCurrentLocation(drone.getBaseLocation());
-                drone.currentEvent = null;
-                drone.taskCompleted();
-                return;
-            }
-
-            // Calculate firefighting duration
-            int firefightingDuration = calculateFirefightingDuration(severity, drone);
-
-            // Drop firefighting agent
-            drone.setCurrentLocation(zoneLocation);
-            drone.dropAgent();
-
-            // Update fire status
-            int dropCount;
-            boolean isExtinguished;
-            
-            // Use synchronized block to atomically check and update drop count
-            synchronized (DroneSubsystem.class) {
-                dropCount = recordDropForZone(zoneId);
-                isExtinguished = (dropCount >= dronesNeeded);
-                
-                
-                // Only the drone that completes the final drop should send the notification
-                if (isExtinguished && dropCount == dronesNeeded) {
-                    drone.sendFireExtinguishedStatus(zoneId);
-                }
-            }
-
-            // Return to base
-            drone.setTargetLocation(drone.getBaseLocation());
-            drone.returningBack();
-            simulateMovement(drone, drone.getBaseLocation());
-
-            // Complete mission
+        int dronesNeeded = getRequiredDronesForSeverity(severity);
+        int currentDrops = getDropsForZone(zoneId);
+        
+        // Check if fire is already extinguished before starting mission
+        if (currentDrops >= dronesNeeded) {
             drone.setCurrentLocation(drone.getBaseLocation());
             drone.currentEvent = null;
-            drone.taskCompleted();
-            
+            drone.setState(new Idle());
+            drone.sendStatusUpdate();
+            return;
+        }
+
+        // Initialize mission parameters
+        drone.setTargetLocation(zoneLocation);
+        drone.currentEvent = event;
+        drone.scheduleFireEvent(event);
+
+        // Travel to fire location
+        simulateMovement(drone, zoneLocation);
+        
+        // Check again if fire still needs attention upon arrival
+        if (getDropsForZone(zoneId) >= dronesNeeded) {
+            returnToBase(drone);
+            return;
+        }
+
+        // Drop firefighting agent
+        drone.setCurrentLocation(zoneLocation);
+        drone.dropAgent();
+
+        // Update fire status and notify if extinguished
+        synchronized (DroneSubsystem.class) {
+            int dropCount = recordDropForZone(zoneId);
+            if (dropCount == dronesNeeded) {
+                drone.sendFireExtinguishedStatus(zoneId);
+            }
+        }
+
+        // Return to base and complete mission
+        returnToBase(drone);
+    }
+    
+    /**
+     * Helper method to return drone to base and complete mission
+     */
+    private static void returnToBase(DroneSubsystem drone) throws InterruptedException {
+        drone.setTargetLocation(drone.getBaseLocation());
+        drone.returningBack();
+        simulateMovement(drone, drone.getBaseLocation());
+        
+        drone.setCurrentLocation(drone.getBaseLocation());
+        drone.currentEvent = null;
+        drone.taskCompleted();
     }
 
     /**
@@ -750,45 +570,51 @@ public class DroneSubsystem {
     /**
      * Get zone location from zone ID
      * 
-     * Note: This method attempts to get the correct zone center by communicating with the scheduler,
-     * which will connect to DroneManager for the actual zone data. If communication fails,
-     * it falls back to a hardcoded calculation.
+     * First attempts to get zone center via network request to scheduler,
+     * then falls back to hardcoded calculation if that fails.
      */
     private static Location getZoneLocation(int zoneId) {
         try {
-            // First try to get zone center from the scheduler
-            // Send a request to the scheduler asking for zone coordinates
-            String request = "ZONE_INFO_REQUEST:" + zoneId;
-            byte[] msg = request.getBytes();
-            DatagramPacket requestPacket = new DatagramPacket(msg, msg.length, InetAddress.getLocalHost(), 6001);
+            // Request zone info from scheduler
             DatagramSocket tempSocket = new DatagramSocket();
-            tempSocket.setSoTimeout(1000); // Wait up to 1 second for response
+            tempSocket.setSoTimeout(1000); // 1 second timeout
+            
+            // Send request
+            String request = "ZONE_INFO_REQUEST:" + zoneId;
+            byte[] requestData = request.getBytes();
+            DatagramPacket requestPacket = new DatagramPacket(
+                requestData, requestData.length, 
+                InetAddress.getLocalHost(), 6001
+            );
             tempSocket.send(requestPacket);
             
-            // Wait for response
-            byte[] buffer = new byte[100];
-            DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
+            // Receive response
+            byte[] responseData = new byte[100];
+            DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length);
             tempSocket.receive(responsePacket);
             tempSocket.close();
             
-            String response = new String(buffer, 0, responsePacket.getLength());
+            // Parse response
+            String response = new String(responseData, 0, responsePacket.getLength());
             if (response.startsWith("ZONE_INFO:")) {
                 String[] parts = response.split(":");
                 if (parts.length >= 4) {
-                    int x = Integer.parseInt(parts[2]);
-                    int y = Integer.parseInt(parts[3]);
-                    return new Location(x, y);
+                    return new Location(
+                        Integer.parseInt(parts[2]),
+                        Integer.parseInt(parts[3])
+                    );
                 }
             }
         } catch (Exception e) {
-            // If any error occurs, fall back to hardcoded calculation
+            // Network request failed, use fallback
         }
         
-        // Fallback to hardcoded calculation if communication fails
-        // Use actual zone dimensions from zones.txt: 700x500 for columns 1-3
-        int x = ((zoneId-1) % 3) * 700 + 350; // 700m wide zones, centered at x+350
-        int y = ((zoneId-1) / 3) * 500 + 250; // 500m tall zones, centered at y+250
-        return new Location(x, y);
+        // Fallback: calculate zone location based on grid layout
+        // 700x500 zones in a 3-column grid
+        return new Location(
+            ((zoneId-1) % 3) * 700 + 350, // centered at x+350
+            ((zoneId-1) / 3) * 500 + 250  // centered at y+250
+        );
     }
 
     /**
@@ -797,9 +623,7 @@ public class DroneSubsystem {
     private static void simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
         Location currentLocation = drone.getCurrentLocation();
         int distance = currentLocation.distanceTo(targetLocation);
-        boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");
-        String droneId = drone.getDroneId();
-
+        
         drone.startMovementTimer();
         
         // Skip if already at target
@@ -808,36 +632,31 @@ public class DroneSubsystem {
             return;
         }
 
-        // Calculate movement parameters
+        // Calculate travel time based on drone speed
         DroneSpecifications specs = drone.getSpecifications();
-        double maxSpeed = isFaulted ? specs.getMaxSpeed() * 0.5 : specs.getMaxSpeed();
+        boolean isFaulted = drone.getCurrentStateName().equalsIgnoreCase("Fault");
         
-        // Temporarily modify specs if faulted for accurate calculation
-        double originalMaxSpeed = specs.getMaxSpeed();
+        // Calculate travel time considering fault status
+        int travelTimeMs;
         if (isFaulted) {
-            specs.setMaxSpeed(maxSpeed);
-        }
-        
-        int travelTimeMs = specs.calculateTravelTime(distance);
-        
-        // Restore original specs
-        if (isFaulted) {
-            specs.setMaxSpeed(originalMaxSpeed);
+            double originalSpeed = specs.getMaxSpeed();
+            specs.setMaxSpeed(originalSpeed * 0.5);
+            travelTimeMs = specs.calculateTravelTime(distance);
+            specs.setMaxSpeed(originalSpeed);
+        } else {
+            travelTimeMs = specs.calculateTravelTime(distance);
         }
 
-        // Simulate movement in steps for smoother visualization
-        // Increase steps for much smoother movement
+        // Simulate movement in steps for visualization
         int steps = Math.max(50, distance / 10);
-        if (steps == 0) steps = 1;
         int stepDelayMs = travelTimeMs / steps;
 
         // Update position in steps
         for (int i = 1; i <= steps; i++) {
             int x = currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * i / steps;
             int y = currentLocation.getY() + (targetLocation.getY() - currentLocation.getY()) * i / steps;
-            Location intermediateLocation = new Location(x, y);
-
-            drone.setCurrentLocation(intermediateLocation);
+            
+            drone.setCurrentLocation(new Location(x, y));
             drone.sendStatusUpdate();
             Thread.sleep(stepDelayMs);
         }
@@ -855,17 +674,15 @@ public class DroneSubsystem {
         try {
             final int NUM_DRONES = 10;
             DroneSpecifications droneSpecs = new DroneSpecifications();
-            DroneSubsystem[] drones = new DroneSubsystem[NUM_DRONES];
             Thread[] threads = new Thread[NUM_DRONES];
+            InetAddress localHost = InetAddress.getLocalHost();
 
             // Create and start drone threads
             for (int i = 0; i < NUM_DRONES; i++) {
                 String droneId = "drone" + (i + 1);
-                drones[i] = new DroneSubsystem(InetAddress.getLocalHost(), droneId, 
-                                              new Location(0, 0), droneSpecs);
-
-                final int droneIndex = i;
-                threads[i] = new Thread(() -> runDrone(drones[droneIndex]));
+                DroneSubsystem drone = new DroneSubsystem(localHost, droneId, new Location(0, 0), droneSpecs);
+                
+                threads[i] = new Thread(() -> runDrone(drone));
                 threads[i].start();
                 Thread.sleep(500);  // Stagger starts to avoid port conflicts
             }
@@ -874,9 +691,6 @@ public class DroneSubsystem {
             for (Thread thread : threads) {
                 thread.join();
             }
-
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
         } catch (Exception e) {
             e.printStackTrace();
         }
