@@ -226,10 +226,14 @@ public class DroneSubsystem {
             taskInfo = " TASK:" + event.getZoneID() + ":" + event.getSeverity();
         }
         
+        // Include capacity info in the status message
+        String capacityInfo = " CAPACITY:" + specifications.getCurrentCapacity();
+        
         return droneId + " " +
                currentState.getClass().getSimpleName() + 
                errorInfo + 
                taskInfo + 
+               capacityInfo +
                additionalInfo + " " +
                currentLocation.getX() + " " +
                currentLocation.getY();
@@ -277,6 +281,8 @@ public class DroneSubsystem {
      */
     public void dropAgent() {
         performStateTransition(() -> {
+            // Set capacity to 0 when dropping agent
+            specifications.empty();
             currentState.dropAgent(this);
             resetTimers();
         });
@@ -541,6 +547,8 @@ public class DroneSubsystem {
         simulateMovement(drone, drone.getBaseLocation());
         
         drone.setCurrentLocation(drone.getBaseLocation());
+        // Refill capacity when arriving back to base
+        drone.getSpecifications().refill();
         drone.currentEvent = null;
         drone.taskCompleted();
     }
@@ -673,13 +681,14 @@ public class DroneSubsystem {
     public static void main(String[] args) {
         try {
             final int NUM_DRONES = 10;
-            DroneSpecifications droneSpecs = new DroneSpecifications();
             Thread[] threads = new Thread[NUM_DRONES];
             InetAddress localHost = InetAddress.getLocalHost();
 
             // Create and start drone threads
             for (int i = 0; i < NUM_DRONES; i++) {
                 String droneId = "drone" + (i + 1);
+                // Create a new DroneSpecifications object for each drone to avoid shared state
+                DroneSpecifications droneSpecs = new DroneSpecifications();
                 DroneSubsystem drone = new DroneSubsystem(localHost, droneId, new Location(0, 0), droneSpecs);
                 
                 threads[i] = new Thread(() -> runDrone(drone));

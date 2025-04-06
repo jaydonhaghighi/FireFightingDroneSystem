@@ -184,8 +184,15 @@ public class DroneVisualization extends JFrame {
                     detailsPanel.add(createBoldLabel("Max Speed:"));
                     detailsPanel.add(new JLabel(specs.getMaxSpeed() + " km/h"));
                     
-                    detailsPanel.add(createBoldLabel("Capacity:"));
+                    detailsPanel.add(createBoldLabel("Max Capacity:"));
                     detailsPanel.add(new JLabel(specs.getCarryCapacity() + " L"));
+                    
+                    detailsPanel.add(createBoldLabel("Current Capacity:"));
+                    JLabel capacityLabel = new JLabel(specs.getCurrentCapacity() + " L");
+                    if (specs.getCurrentCapacity() <= 0) {
+                        capacityLabel.setForeground(Color.RED);
+                    }
+                    detailsPanel.add(capacityLabel);
                     
                     detailsPanel.add(createBoldLabel("Flow Rate:"));
                     detailsPanel.add(new JLabel(specs.getFlowRate() + " L/s"));

@@ -285,6 +285,7 @@ public class Scheduler {
         int zoneId = -1;
         String severity = null;
         boolean isFireOut = false;
+        double currentCapacity = -1; // Store capacity information
     }
     
     /**
@@ -413,6 +414,15 @@ public class Scheduler {
                     info.zoneId = Integer.parseInt(fireOutParts[1]);
                     info.isFireOut = true;
                 }
+            } else if (part.startsWith("CAPACITY:")) {
+                String[] capacityParts = part.split(":");
+                if (capacityParts.length >= 2) {
+                    try {
+                        info.currentCapacity = Double.parseDouble(capacityParts[1]);
+                    } catch (NumberFormatException e) {
+                        // Ignore parse errors
+                    }
+                }
             }
         }
         
@@ -454,6 +464,12 @@ public class Scheduler {
             
             // Update drone status
             droneManager.updateDroneStatus(droneId, state, location, currentTask);
+            
+            // Update drone capacity if provided in the status update
+            if (taskInfo.currentCapacity >= 0) {
+                // Set current capacity on the drone specifications
+                status.getSpecifications().setCurrentCapacity(taskInfo.currentCapacity);
+            }
         } catch (Exception e) {
             logError("Error updating drone status for " + droneId, e);
         }
@@ -936,15 +952,34 @@ public class Scheduler {
                     DroneStatus drone = availableDrones.get(i);
                     String droneId = drone.getDroneId();
                     
-                    // Assign drone to fire
-                    droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), event);
+                    // Check if drone should be redirected to a higher priority zone
+                    // Create a set of IDs to avoid duplicates in findAvailableDrone
+                    Set<String> currentAssigned = new HashSet<>(assignedDroneIds);
+                    DroneStatus redirectableStatus = findAvailableDrone(event, currentAssigned);
                     
-                    // Update assigned count
-                    fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                    // If the drone was redirected, use the new task
+                    FireEvent actualEvent = event;
+                    int targetZoneId = zoneId;
+                    
+                    if (redirectableStatus != null && redirectableStatus.getCurrentTask() != null) {
+                        FireEvent redirectedTask = redirectableStatus.getCurrentTask();
+                        if (redirectedTask.getZoneID() != zoneId) {
+                            actualEvent = redirectedTask;
+                            targetZoneId = redirectedTask.getZoneID();
+                            log("Drone " + droneId + " was redirected from zone " + zoneId + 
+                                " to higher priority zone " + targetZoneId);
+                        }
+                    }
+                    
+                    // Assign drone to fire
+                    droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), actualEvent);
+                    
+                    // Update assigned count for the actual target zone
+                    fireEventAssignedDrones.compute(targetZoneId, (id, count) -> 
                         (count == null) ? 1 : count + 1);
                         
                     // Send assignment to drone
-                    boolean sent = sendToDrone(event, droneId);
+                    boolean sent = sendToDrone(actualEvent, droneId);
                     if (sent) {
                         dispatched++;
                         assignedDroneIds.add(droneId);
@@ -952,7 +987,7 @@ public class Scheduler {
                     } else {
                         // Revert assignment if send fails
                         droneManager.updateDroneStatus(droneId, "Idle", drone.getCurrentLocation(), null);
-                        fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                        fireEventAssignedDrones.compute(targetZoneId, (id, count) -> 
                             count != null && count > 0 ? count - 1 : null);
                     }
                 }
@@ -1028,21 +1063,34 @@ public class Scheduler {
                     String droneId = drone.getDroneId();
                     assignedDroneIds.add(droneId);
                     
-                    // Update tracking count
-                    Integer oldCount = fireEventAssignedDrones.get(zoneId);
-                    Integer newCount = (oldCount == null) ? 1 : oldCount + 1;
-                    fireEventAssignedDrones.put(zoneId, newCount);
+                    // Check if drone was redirected to a different zone by findAvailableDrone
+                    FireEvent droneTask = drone.getCurrentTask();
+                    int targetZoneId = droneTask != null ? droneTask.getZoneID() : zoneId;
+                    
+                    // Update tracking count for the actual target zone
+                    Integer oldCount = fireEventAssignedDrones.getOrDefault(targetZoneId, 0);
+                    Integer newCount = oldCount + 1;
+                    fireEventAssignedDrones.put(targetZoneId, newCount);
+                    
+                    // If this is a different zone than originally requested, log the redirection
+                    if (targetZoneId != zoneId) {
+                        log("Drone " + droneId + " was redirected from zone " + zoneId + 
+                            " to higher priority zone " + targetZoneId);
+                    }
+                    
+                    // Get the appropriate event (original or redirected)
+                    FireEvent actualEvent = (droneTask != null) ? droneTask : event;
                     
                     // Update drone status and send event
-                    droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), event);
+                    droneManager.updateDroneStatus(droneId, "EnRoute", drone.getCurrentLocation(), actualEvent);
                     
-                    boolean sent = sendToDrone(event, droneId);
+                    boolean sent = sendToDrone(actualEvent, droneId);
                     if (sent) {
                         successfulDispatches++;
                         droneAssignmentCount.incrementAndGet();
                     } else {
                         // Revert tracking count if send failed
-                        fireEventAssignedDrones.compute(zoneId, (id, count) -> 
+                        fireEventAssignedDrones.compute(targetZoneId, (id, count) -> 
                             count != null && count > 0 ? count - 1 : null);
                     }
                     
@@ -1062,7 +1110,9 @@ public class Scheduler {
     }
     
     /**
-     * Finds an available drone for a fire event, avoiding duplicates
+     * Finds an available drone for a fire event, avoiding duplicates.
+     * Before assigning, checks the highest priority zone with active fire
+     * and assigns the drone to that zone if higher priority.
      */
     private DroneStatus findAvailableDrone(FireEvent event, Set<String> assignedDroneIds) {
         try {
@@ -1083,6 +1133,53 @@ public class Scheduler {
             // Check if drone is still available (could have changed state concurrently)
             if (!selectedDrone.isAvailable()) {
                 return null;
+            }
+            
+            // 1. Find the zone with highest priority fire
+            Map<Integer, Zone> zones = droneManager.getAllZones();
+            Map.Entry<Integer, Zone> highestPriorityZone = zones.entrySet().stream()
+                .filter(entry -> entry.getValue().hasFire())
+                .max((e1, e2) -> {
+                    // Compare by severity weight (higher is better)
+                    return getSeverityWeight(e1.getValue().getSeverity()) - 
+                           getSeverityWeight(e2.getValue().getSeverity());
+                })
+                .orElse(null);
+            
+            // If no active fires, keep the original event
+            if (highestPriorityZone == null) {
+                return selectedDrone;
+            }
+            
+            int highestPriorityZoneId = highestPriorityZone.getKey();
+            String highestPrioritySeverity = highestPriorityZone.getValue().getSeverity();
+            
+            // 2. Check if the highest priority zone has an active fire
+            boolean hasActiveFire = highestPriorityZone.getValue().hasFire();
+            
+            // 3. Compare with the provided event's zone
+            int originalZoneId = event.getZoneID();
+            String originalSeverity = event.getSeverity();
+            
+            // If the highest priority zone is different and has higher severity, redirect the drone
+            if (hasActiveFire && highestPriorityZoneId != originalZoneId && 
+                getSeverityWeight(highestPrioritySeverity) > getSeverityWeight(originalSeverity)) {
+                
+                // Check if the zone is already fully assigned
+                int dronesNeeded = getDronesNeededForSeverity(highestPrioritySeverity);
+                int dronesAssigned = fireEventAssignedDrones.getOrDefault(highestPriorityZoneId, 0);
+                
+                if (dronesAssigned < dronesNeeded && !isZoneFullyAssigned(highestPriorityZoneId)) {
+                    // Create a new fire event for this zone
+                    FireEvent redirectEvent = createFireEventForZone(highestPriorityZoneId, highestPrioritySeverity);
+                    
+                    // Return the drone but with this new event (the caller will assign it)
+                    redirectEvent.assignDrone(droneId);
+                    selectedDrone.setCurrentTask(redirectEvent);
+                    log("Redirecting drone " + droneId + " to higher priority zone " + highestPriorityZoneId);
+                    
+                    // The caller will handle the actual dispatch
+                }
             }
             
             return selectedDrone;
