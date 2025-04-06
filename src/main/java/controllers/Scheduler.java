@@ -762,8 +762,8 @@ public class Scheduler {
             // Create zone if it doesn't exist yet
             if (zone == null) {
                 Location zoneLocation = new Location(
-                    ((zoneId-1) % 3) * 700 + 350,  // 700m wide zones, centered at x+350
-                    ((zoneId-1) / 3) * 600 + 300); // 600m tall zones, centered at y+300
+                    ((zoneId-1) % 3) * 350 + 175,  // 350m wide zones, centered at x+175
+                    ((zoneId-1) / 3) * 300 + 150); // 300m tall zones, centered at y+150
                 
                 zone = droneManager.createZone(zoneId, zoneLocation);
             }
@@ -1118,8 +1118,8 @@ public class Scheduler {
                         Zone zone = droneManager.getZone(zoneId);
                         if (zone == null) {
                             Location zoneLocation = new Location(
-                                ((zoneId-1) % 3) * 700 + 350,
-                                ((zoneId-1) / 3) * 600 + 300);
+                                ((zoneId-1) % 3) * 350 + 175,  // 350m wide zones, centered at x+175
+                                ((zoneId-1) / 3) * 300 + 150); // 300m tall zones, centered at y+150
                             zone = droneManager.createZone(zoneId, zoneLocation);
                         }
                         
