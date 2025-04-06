@@ -1,4 +1,4 @@
-# Fire Fighting Drone System (Iteration #4)
+# Fire Fighting Drone System (Iteration #5)
 
 ## Overview
 
@@ -10,6 +10,7 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 
 ## Key Features
 
+- **User Interface**: Simple user interface that allows an operator to monitor the system remotely
 - **Multi-Drone Support**: Manages and coordinates multiple drones simultaneously
 - **Spatial Awareness**: Tracks drone locations and defines geographic zones
 - **Intelligent Drone Assignment**: Selects optimal drone based on proximity, workload, and availability
@@ -27,12 +28,12 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 ---
 ## Team Contributions
 
-- `Brendan:` Fault injecttion and class diagram
-- `Abolarinwa:` Implementing fault handling for Nozzle Jam
-- `Zeena:`Implementing fault handling for drone stuck in mid-air
-- `Jaydon:` Timing diagram, fixing bugs, code review
-- `Raiqah:` Implementing fault handling for drone stuck in mid-air
-- `Leen:` Implementing fault handling for packet loss
+- `Brendan:` Updated State Machine diagram to include fault states, Re-implemented error injection, Debugging
+- `Abolarinwa:` 
+- `Zeena:`
+- `Jaydon:` 
+- `Raiqah:` Updated UML Class diagram with new changes
+- `Leen:` 
 
 
 ---
@@ -50,6 +51,7 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - **Scheduler**: Central coordinator that receives fire events and assigns them to drones
 - **DroneManager**: Manages the drone fleet, zone mapping, and drone selection algorithms
 - **DroneSubsystem**: Handles individual drone behavior including state transitions and movement
+- **DronVisualization**: Responsible for all of the user-interface control/interaction in the system
 
 ---
 
@@ -124,61 +126,16 @@ Each line defines a zone with:
 
 ## Example Console Output
 
-### Scheduler:
+### FireIncidentSystem:
 ```
-[SCHEDULER] Registered drone drone1 on port 7101
-[SCHEDULER] Registered drone drone2 on port 7201
-[SCHEDULER] Registered drone drone3 on port 7301
-[SCHEDULER] Initialized at (0,0)
-[SCHEDULER] Waiting for drones to register...
-[STANDBY] System monitoring
-[SCHEDULER] Starting to process messages
-[STATUS] No drones registered
-[SYSTEM MAP] (10 zones, 0 drones)
-
-[SCHEDULER] Received packet: drone1 Idle 0 0
-[SCHEDULER] Identified drone status update from: drone1
-[SCHEDULER] Registered new drone: drone1
-[SCHEDULER] Updated drone status: drone1 at (0,0) in state Idle
-
-[ALERT] High fire in Zone 1 at (5,5)
-[ASSIGNED] drone1 to Zone 1 (5 units away, 0 previous missions)
-[SCHEDULER] Sending fire assignment to Drone drone1: 14:03:15 1 FIRE_DETECTED High drone1
+[SYSTEM] Ready to send fire alerts
+FIRE ALERT: 14:03:33 12 FIRE_DETECTED High NONE
+Next fire in 1s
+FIRE ALERT: 14:15:00 3 FIRE_DETECTED Low NOZZLE_JAM
+Next fire in 1s
+FIRE ALERT: 14:14:03 2 FIRE_DETECTED Moderate NONE
+Next fire in 1s
+FIRE ALERT: 14:03:06 1 FIRE_DETECTED High NONE
+Next fire in 1s
+FIRE ALERT: 14:03:09 8 FIRE_DETECTED High NONE
 ```
-
-### DroneSubsystem:
-```
-[DRONE] drone1 initialized at (0,0)
-[DRONE] Registered with scheduler
-[DRONE] Current state: Idle
-
-[DRONE drone1] Received packet: 14:03:15 1 FIRE_DETECTED High
-[DRONE] Processing fire event: 14:03:15 1 FIRE_DETECTED High
-[DRONE] State before: IDLE
-[DRONE] State after: EN ROUTE
-
-DRONE drone1: Mission start to Zone 1 - High fire
-DRONE drone1: Flying to zone (1050 meters, 10.5s, normal speed, max speed: 35.0 km/h)
-DRONE drone1: Flight 50% complete
-DRONE drone1: Successfully dropped agent at Zone 1
-DRONE drone1: Fighting fire in Zone 1 (8s, flow rate: 2.0 L/s)
-DRONE drone1: Fire extinguished in Zone 1 (Drops: 1/3)
-DRONE drone1: Returning to base after mission
-DRONE drone1: Flying to base (1050 meters, 10.5s, normal speed, max speed: 35.0 km/h)
-DRONE drone1: Flight 50% complete
-DRONE drone1: Mission complete, ready for next assignment
-
-# Example with fault:
-[DRONE drone3] Received packet: 14:10:45 6 FIRE_DETECTED High NOZZLE_JAM
-[DRONE drone3] Error injected from input: NOZZLE_JAM
-[DRONE drone3] Hard fault detected, aborting mission
-[DRONE drone3] ERROR DETECTED: NOZZLE_JAM
-[DRONE drone3] HARD FAULT: Shutting down drone
-
-# Timing diagram at end of program:
-DRONE drone1 CYCLE: running 10.5s, running 8.0s, running 10.5s, idle 4.8s
-DRONE drone2 CYCLE: running 12.3s, preempted (fault) 3.2s, idle 5.0s
-DRONE drone3 CYCLE: idle 2.0s, preempted (fault) 10.5s
-```
-
-

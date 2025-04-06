@@ -22,9 +22,9 @@ public class Zone {
     public Zone(int id, Location location) {
         this.id = id;
         this.center = location;
-        // Default boundaries around the center point (350m x 300m rectangular zone)
-        this.topLeft = new Location(location.getX() - 350, location.getY() - 300);
-        this.bottomRight = new Location(location.getX() + 350, location.getY() + 300);
+        // Default boundaries around the center point (175m x 150m rectangular zone) - halved size
+        this.topLeft = new Location(location.getX() - 175, location.getY() - 150);
+        this.bottomRight = new Location(location.getX() + 175, location.getY() + 150);
         this.hasFire = false;
         this.severity = "NONE";
     }

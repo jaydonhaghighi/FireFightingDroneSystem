@@ -8,6 +8,7 @@ public class DroneSpecifications {
     private int timeToOpenNozzle; // Time to open nozzle in milliseconds
     private double flowRate; // Flow rate in litres/s
     private double carryCapacity; // Carry capacity in litres
+    private double currentCapacity; // Current amount of agent in litres
     private int batteryLife; // Battery life in minutes
     private double acceleration; // Acceleration in m/s²
     private double deceleration; // Deceleration in m/s²
@@ -20,6 +21,7 @@ public class DroneSpecifications {
         this.timeToOpenNozzle = 100;  // 100 ms to open nozzle
         this.flowRate = 500.0;          // 500 litres/s flow rate
         this.carryCapacity = 10.0;    // 10 litres total capacity
+        this.currentCapacity = 10.0;  // Start with full capacity
         this.batteryLife = 50;        // 50 minutes flight time
         this.acceleration = 4.8;      // 4.8 m/s²
         this.deceleration = 4.8;      // 4.8 m/s²
@@ -43,6 +45,7 @@ public class DroneSpecifications {
         this.timeToOpenNozzle = timeToOpenNozzle;
         this.flowRate = flowRate;
         this.carryCapacity = carryCapacity;
+        this.currentCapacity = carryCapacity; // Start with full capacity
         this.batteryLife = batteryLife;
         this.acceleration = acceleration;
         this.deceleration = deceleration;
@@ -118,6 +121,38 @@ public class DroneSpecifications {
      */
     public void setCarryCapacity(double carryCapacity) {
         this.carryCapacity = carryCapacity;
+    }
+    
+    /**
+     * Gets the current capacity of the drone
+     * 
+     * @return current capacity in litres
+     */
+    public double getCurrentCapacity() {
+        return currentCapacity;
+    }
+    
+    /**
+     * Sets the current capacity of the drone
+     * 
+     * @param currentCapacity the new current capacity in litres
+     */
+    public void setCurrentCapacity(double currentCapacity) {
+        this.currentCapacity = currentCapacity;
+    }
+    
+    /**
+     * Refills the drone to full capacity
+     */
+    public void refill() {
+        this.currentCapacity = this.carryCapacity;
+    }
+    
+    /**
+     * Empties the drone's capacity (sets to 0)
+     */
+    public void empty() {
+        this.currentCapacity = 0.0;
     }
     
     /**
@@ -215,6 +250,7 @@ public class DroneSpecifications {
     
     /**
      * Calculate the time required to extinguish a fire based on its severity
+     * The method also updates the current capacity based on the amount used.
      * 
      * @param severity the fire severity (low, moderate, high)
      * @return the time required to extinguish the fire in milliseconds
@@ -237,14 +273,17 @@ public class DroneSpecifications {
         }
         
         // Check if we have enough capacity
-        if (litresRequired > carryCapacity) {
+        if (litresRequired > currentCapacity) {
             // We can only use what we have - will not fully extinguish
-            litresRequired = carryCapacity;
+            litresRequired = currentCapacity;
         }
         
         // Calculate time based on flow rate (litres/s) and add nozzle opening time
         int firefightingTime = (int) ((litresRequired / flowRate) * 1000); // Time in milliseconds
         int totalTime = firefightingTime + timeToOpenNozzle;
+        
+        // Note: In DroneSubsystem.dropAgent() we call empty() which sets capacity to 0
+        // This calculation is just for time estimation
         
         return totalTime;
     }
@@ -256,6 +295,7 @@ public class DroneSpecifications {
                 ", timeToOpenNozzle=" + timeToOpenNozzle + " ms" +
                 ", flowRate=" + flowRate + " L/s" +
                 ", carryCapacity=" + carryCapacity + " L" +
+                ", currentCapacity=" + currentCapacity + " L" +
                 ", batteryLife=" + batteryLife + " min" +
                 ", acceleration=" + acceleration + " m/s²" +
                 ", deceleration=" + deceleration + " m/s²" +

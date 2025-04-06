@@ -42,12 +42,10 @@ public class FireEvent {
         this.assignedDroneId = null;
         this.assignedDrones = new HashSet<>();
 
-        // Set the error type based on the passed string
+        // Set the error type based on the passed string - no random errors
         if (errorType.equals("ERROR")) {
-            // Randomly assign an error for the generic ERROR case
-            ErrorType[] errorTypes = ErrorType.values();
-            int randomI = new Random().nextInt(errorTypes.length - 1); // Randomly pick an error
-            this.error = errorTypes[randomI];
+            // Set to NONE instead of randomly assigning an error
+            this.error = ErrorType.NONE;
         } else {
             // Try to match a specific error type
             setErrorFromString(errorType);
@@ -108,7 +106,12 @@ public class FireEvent {
      */
     public void assignDrone(String droneId) {
         this.assignedDroneId = droneId; // Keep for backward compatibility
-        this.assignedDrones.add(droneId); // Add to the set of all assigned drones
+        
+        // Make sure we're not adding the same drone multiple times
+        if (this.assignedDrones.contains(droneId)) {
+        } else {
+            this.assignedDrones.add(droneId); // Add to the set of all assigned drones
+        }
     }
 
     /**
@@ -181,18 +184,21 @@ public class FireEvent {
             int zoneID = Integer.parseInt(parts[1]);
             String eventType = parts[2];
             String severity = parts[3];
-
-            FireEvent event = new FireEvent(time, zoneID, eventType, severity, "NONE");
-
-            // Check if a drone ID is included
-            if (parts.length > 4 && !isErrorType(parts[4])) {
-                event.assignDrone(parts[4]);
+            
+            // Check if the last part is an error type (could be at position 4 or 5)
+            String errorType = "NONE";
+            if (parts.length > 4) {
+                String lastPart = parts[parts.length - 1];
+                if (isErrorType(lastPart)) {
+                    errorType = lastPart;
+                }
             }
 
-            // Check if an error type is included
-            if (parts.length > 5) {
-                // Parse error type
-                event.setErrorFromString(parts[5]);
+            FireEvent event = new FireEvent(time, zoneID, eventType, severity, errorType);
+
+            // Check if a drone ID is included (but not if it's the error type)
+            if (parts.length > 4 && !isErrorType(parts[4])) {
+                event.assignDrone(parts[4]);
             }
 
             return event;
