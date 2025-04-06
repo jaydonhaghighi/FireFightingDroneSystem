@@ -32,7 +32,7 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - `Abolarinwa:` 
 - `Zeena:`
 - `Jaydon:` 
-- `Raiqah:` 
+- `Raiqah:` Updated UML Class diagram with new changes
 - `Leen:` 
 
 
