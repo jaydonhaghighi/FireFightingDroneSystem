@@ -769,7 +769,7 @@ public class DroneVisualization extends JFrame {
      */
     private class DroneVisualizationThread extends Thread {
         private final DroneVisualization visualization;
-        private static final int UPDATE_INTERVAL = 100; // Update more frequently for smoother animation
+        private static final int UPDATE_INTERVAL = 16; // ~60fps for extremely smooth animation
         
         /**
          * Creates a new visualization thread

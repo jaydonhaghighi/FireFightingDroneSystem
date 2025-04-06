@@ -619,17 +619,50 @@ public class DroneSubsystem {
             travelTimeMs = specs.calculateTravelTime(distance);
         }
 
-        // Simulate movement in steps for visualization
-        int steps = Math.max(50, distance / 10);
-        int stepDelayMs = travelTimeMs / steps;
-
-        // Update position in steps
-        for (int i = 1; i <= steps; i++) {
-            int x = currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * i / steps;
-            int y = currentLocation.getY() + (targetLocation.getY() - currentLocation.getY()) * i / steps;
+        // Use a much more gradual movement approach
+        // The key issue is probably that we're sending too many status updates
+        // causing network congestion
+        
+        // Calculate a reasonable number of updates to send 
+        // Rather than basing it on distance, we'll use a time-based approach
+        // aiming for around 20 updates per second
+        int desiredFramerate = 20; // frames per second for status updates
+        int totalUpdates = (travelTimeMs / 1000) * desiredFramerate;
+        totalUpdates = Math.max(10, totalUpdates); // Ensure at least 10 updates
+        
+        // Calculate how many milliseconds between each update
+        int updateIntervalMs = travelTimeMs / totalUpdates;
+        
+        // Use more internal steps for smoother local calculation (5x the visible updates)
+        int internalSteps = totalUpdates * 5;
+        int stepDelayMs = travelTimeMs / internalSteps;
+        stepDelayMs = Math.max(5, stepDelayMs); // Minimum 5ms delay
+        
+        // Keep track of when we last sent an update
+        long lastUpdateTime = System.currentTimeMillis();
+        long startTime = lastUpdateTime;
+        long endTime = startTime + travelTimeMs;
+        
+        // Update position based on elapsed time for smoother motion
+        while (System.currentTimeMillis() < endTime) {
+            long currentTime = System.currentTimeMillis();
+            double progress = (double)(currentTime - startTime) / travelTimeMs;
+            progress = Math.min(1.0, progress); // Ensure we don't exceed 1.0
             
+            // Calculate position based on progress (0.0 to 1.0)
+            int x = (int)(currentLocation.getX() + (targetLocation.getX() - currentLocation.getX()) * progress);
+            int y = (int)(currentLocation.getY() + (targetLocation.getY() - currentLocation.getY()) * progress);
+            
+            // Update drone's location
             drone.setCurrentLocation(new Location(x, y));
-            drone.sendStatusUpdate();
+            
+            // Only send status updates at fixed intervals
+            if (currentTime - lastUpdateTime >= updateIntervalMs) {
+                drone.sendStatusUpdate();
+                lastUpdateTime = currentTime;
+            }
+            
+            // Short sleep to prevent high CPU usage
             Thread.sleep(stepDelayMs);
         }
 
