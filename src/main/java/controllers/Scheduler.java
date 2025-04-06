@@ -80,23 +80,11 @@ public class Scheduler {
         @Override
         public int compare(FireEvent e1, FireEvent e2) {
             // Compare severity first (High > Moderate > Low)
-            int severityCompare = getSeverityWeight(e2.getSeverity()) - getSeverityWeight(e1.getSeverity());
+            int severityCompare = DroneManager.getSeverityWeight(e2.getSeverity()) - DroneManager.getSeverityWeight(e1.getSeverity());
             if (severityCompare != 0) return severityCompare;
             
             // If severity is the same, compare by time (older events first)
             return e1.getTime().compareTo(e2.getTime());
-        }
-    }
-    
-    /**
-     * Helper method to get numeric weight for severity levels
-     */
-    private static int getSeverityWeight(String severity) {
-        switch (severity.toLowerCase()) {
-            case "high": return 100;
-            case "moderate": return 50;
-            case "low": return 10;
-            default: return 0;
         }
     }
 
@@ -251,27 +239,7 @@ public class Scheduler {
      */
     private boolean isDroneStatusUpdate(String message) {
         try {
-            String[] parts = message.split(" ");
-            
-            // Must have at least: droneId state x y
-            if (parts.length < 4) {
-                return false;
-            }
-            
-            // First part must be a drone ID
-            String droneId = parts[0];
-            if (!droneId.startsWith("drone")) {
-                return false;
-            }
-            
-            // Last two elements should be coordinates
-            try {
-                Integer.parseInt(parts[parts.length - 2]);
-                Integer.parseInt(parts[parts.length - 1]);
-                return true;
-            } catch (NumberFormatException e) {
-                return false;
-            }
+            return DroneManager.isDroneStatusMessage(message);
         } catch (Exception e) {
             logError("Error in isDroneStatusUpdate", e);
             return false;
@@ -522,8 +490,8 @@ public class Scheduler {
                         
                         String severity = zone.getSeverity();
                         int currentWeight = highestPrioritySeverity != null ? 
-                            getSeverityWeight(highestPrioritySeverity) : -1;
-                        int newWeight = getSeverityWeight(severity);
+                            DroneManager.getSeverityWeight(highestPrioritySeverity) : -1;
+                        int newWeight = DroneManager.getSeverityWeight(severity);
                         
                         // If this is our first candidate or has higher severity
                         if (highestPriorityZoneId == null || newWeight > currentWeight) {
@@ -573,16 +541,7 @@ public class Scheduler {
      * Counts the number of drones assigned to a specific zone
      */
     private int countDronesForZone(int zoneId) {
-        int count = 0;
-        for (DroneStatus drone : droneManager.getAllDrones()) {
-            FireEvent task = drone.getCurrentTask();
-            if (task != null && task.getZoneID() == zoneId &&
-                !drone.getState().equalsIgnoreCase("IDLE") &&
-                !drone.getState().equalsIgnoreCase("Idle")) {
-                count++;
-            }
-        }
-        return count;
+        return droneManager.countDronesForZone(zoneId);
     }
     
     /**
@@ -653,11 +612,7 @@ public class Scheduler {
      * Creates a FireEvent object for a specified zone
      */
     private FireEvent createFireEventForZone(int zoneId, String severity) {
-        // Generate a timestamp
-        String timestamp = String.format("%d", System.currentTimeMillis());
-        
-        // Create a new fire event
-        return new FireEvent(timestamp, zoneId, "FIRE", severity, "NONE");
+        return droneManager.createFireEventForZone(zoneId, severity);
     }
 
     /**
@@ -736,15 +691,7 @@ public class Scheduler {
      */
     private int getDronesNeededForSeverity(String severity) {
         try {
-            switch (severity.toLowerCase()) {
-                case "high":
-                    return 3; // 30L total capacity needed - 3 drones with 10L each
-                case "moderate":
-                    return 2; // 20L total capacity needed - 2 drones with 10L each
-                case "low":
-                default:
-                    return 1; // 10L total capacity needed - 1 drone with 10L
-            }
+            return droneManager.getDronesNeededForSeverity(severity);
         } catch (Exception e) {
             logError("Error calculating drones needed for severity", e);
             // Default to 1 drone in case of error
@@ -812,8 +759,8 @@ public class Scheduler {
             // Check if zone already has fire of same or higher severity
             boolean updateZoneStatus = true;
             if (zone.hasFire()) {
-                int currentSeverityWeight = getSeverityWeight(zone.getSeverity());
-                int newSeverityWeight = getSeverityWeight(severity);
+                int currentSeverityWeight = DroneManager.getSeverityWeight(zone.getSeverity());
+                int newSeverityWeight = DroneManager.getSeverityWeight(severity);
                 
                 if (currentSeverityWeight >= newSeverityWeight) {
                     updateZoneStatus = false;
@@ -862,8 +809,8 @@ public class Scheduler {
                 .filter(entry -> entry.getValue().hasFire())
                 .sorted((e1, e2) -> {
                     // Sort by severity (high to low)
-                    int severityCompare = getSeverityWeight(e2.getValue().getSeverity()) - 
-                                         getSeverityWeight(e1.getValue().getSeverity());
+                    int severityCompare = DroneManager.getSeverityWeight(e2.getValue().getSeverity()) - 
+                                         DroneManager.getSeverityWeight(e1.getValue().getSeverity());
                     if (severityCompare != 0) return severityCompare;
                     
                     // If same severity, sort by which needs more drones proportionally
@@ -1116,69 +1063,15 @@ public class Scheduler {
      */
     private DroneStatus findAvailableDrone(FireEvent event, Set<String> assignedDroneIds) {
         try {
-            // Use DroneManager to select best drone
-            DroneStatus selectedDrone = droneManager.selectBestDroneForEvent(event);
+            // Use the refactored DroneManager method
+            DroneStatus selectedDrone = droneManager.findAvailableDrone(event, assignedDroneIds, true);
             
-            if (selectedDrone == null) {
-                return null;
-            }
-            
-            String droneId = selectedDrone.getDroneId();
-            
-            // Check if drone is already in the assigned set
-            if (assignedDroneIds.contains(droneId)) {
-                return null;
-            }
-            
-            // Check if drone is still available (could have changed state concurrently)
-            if (!selectedDrone.isAvailable()) {
-                return null;
-            }
-            
-            // 1. Find the zone with highest priority fire
-            Map<Integer, Zone> zones = droneManager.getAllZones();
-            Map.Entry<Integer, Zone> highestPriorityZone = zones.entrySet().stream()
-                .filter(entry -> entry.getValue().hasFire())
-                .max((e1, e2) -> {
-                    // Compare by severity weight (higher is better)
-                    return getSeverityWeight(e1.getValue().getSeverity()) - 
-                           getSeverityWeight(e2.getValue().getSeverity());
-                })
-                .orElse(null);
-            
-            // If no active fires, keep the original event
-            if (highestPriorityZone == null) {
-                return selectedDrone;
-            }
-            
-            int highestPriorityZoneId = highestPriorityZone.getKey();
-            String highestPrioritySeverity = highestPriorityZone.getValue().getSeverity();
-            
-            // 2. Check if the highest priority zone has an active fire
-            boolean hasActiveFire = highestPriorityZone.getValue().hasFire();
-            
-            // 3. Compare with the provided event's zone
-            int originalZoneId = event.getZoneID();
-            String originalSeverity = event.getSeverity();
-            
-            // If the highest priority zone is different and has higher severity, redirect the drone
-            if (hasActiveFire && highestPriorityZoneId != originalZoneId && 
-                getSeverityWeight(highestPrioritySeverity) > getSeverityWeight(originalSeverity)) {
-                
-                // Check if the zone is already fully assigned
-                int dronesNeeded = getDronesNeededForSeverity(highestPrioritySeverity);
-                int dronesAssigned = fireEventAssignedDrones.getOrDefault(highestPriorityZoneId, 0);
-                
-                if (dronesAssigned < dronesNeeded && !isZoneFullyAssigned(highestPriorityZoneId)) {
-                    // Create a new fire event for this zone
-                    FireEvent redirectEvent = createFireEventForZone(highestPriorityZoneId, highestPrioritySeverity);
-                    
-                    // Return the drone but with this new event (the caller will assign it)
-                    redirectEvent.assignDrone(droneId);
-                    selectedDrone.setCurrentTask(redirectEvent);
-                    log("Redirecting drone " + droneId + " to higher priority zone " + highestPriorityZoneId);
-                    
-                    // The caller will handle the actual dispatch
+            if (selectedDrone != null) {
+                // Check if there's a zone redirect
+                FireEvent task = selectedDrone.getCurrentTask();
+                if (task != null && task.getZoneID() != event.getZoneID()) {
+                    log("Redirecting drone " + selectedDrone.getDroneId() + 
+                        " to higher priority zone " + task.getZoneID());
                 }
             }
             
@@ -1221,8 +1114,8 @@ public class Scheduler {
                         // Check if zone already has a higher severity fire
                         boolean updateZoneStatus = true;
                         if (zone.hasFire()) {
-                            int currentSeverityWeight = getSeverityWeight(zone.getSeverity());
-                            int newSeverityWeight = getSeverityWeight(severity);
+                            int currentSeverityWeight = DroneManager.getSeverityWeight(zone.getSeverity());
+                            int newSeverityWeight = DroneManager.getSeverityWeight(severity);
                             
                             if (currentSeverityWeight >= newSeverityWeight) {
                                 updateZoneStatus = false;

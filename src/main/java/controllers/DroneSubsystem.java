@@ -440,9 +440,11 @@ public class DroneSubsystem {
     }
 
     /**
-     * Zone tracking methods with proper synchronization to prevent concurrency issues
+     * Zone tracking methods that use DroneManager when possible
+     * We keep the static implementation for backward compatibility
      */
     public static synchronized int recordDropForZone(int zoneId) {
+        // We could use a singleton DroneManager here in a more comprehensive refactoring
         int currentDrops = zoneDropsMap.getOrDefault(zoneId, 0);
         int newTotal = currentDrops + 1;
         zoneDropsMap.put(zoneId, newTotal);
@@ -564,15 +566,9 @@ public class DroneSubsystem {
      * Determine required drones based on fire severity
      */
     private static int getRequiredDronesForSeverity(String severity) {
-        switch (severity.toLowerCase()) {
-            case "high":
-                return 3; // 30L water needed
-            case "moderate":
-                return 2; // 20L water needed
-            case "low":
-            default:
-                return 1; // 10L water needed
-        }
+        // Creating a temporary DroneManager to use its method
+        // In a real refactoring, we would need to adjust the architecture more substantially
+        return new DroneManager(new Location(0, 0)).getDronesNeededForSeverity(severity);
     }
 
     /**
@@ -583,46 +579,14 @@ public class DroneSubsystem {
      */
     private static Location getZoneLocation(int zoneId) {
         try {
-            // Request zone info from scheduler
-            DatagramSocket tempSocket = new DatagramSocket();
-            tempSocket.setSoTimeout(1000); // 1 second timeout
-            
-            // Send request
-            String request = "ZONE_INFO_REQUEST:" + zoneId;
-            byte[] requestData = request.getBytes();
-            DatagramPacket requestPacket = new DatagramPacket(
-                requestData, requestData.length, 
-                InetAddress.getLocalHost(), 6001
-            );
-            tempSocket.send(requestPacket);
-            
-            // Receive response
-            byte[] responseData = new byte[100];
-            DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length);
-            tempSocket.receive(responsePacket);
-            tempSocket.close();
-            
-            // Parse response
-            String response = new String(responseData, 0, responsePacket.getLength());
-            if (response.startsWith("ZONE_INFO:")) {
-                String[] parts = response.split(":");
-                if (parts.length >= 4) {
-                    return new Location(
-                        Integer.parseInt(parts[2]),
-                        Integer.parseInt(parts[3])
-                    );
-                }
-            }
+            return DroneManager.getZoneLocation(zoneId, InetAddress.getLocalHost());
         } catch (Exception e) {
-            // Network request failed, use fallback
+            // If there's an error getting the local host, use fallback
+            return new Location(
+                ((zoneId-1) % 3) * 700 + 350, // centered at x+350
+                ((zoneId-1) / 3) * 500 + 250  // centered at y+250
+            );
         }
-        
-        // Fallback: calculate zone location based on grid layout
-        // 700x500 zones in a 3-column grid
-        return new Location(
-            ((zoneId-1) % 3) * 700 + 350, // centered at x+350
-            ((zoneId-1) / 3) * 500 + 250  // centered at y+250
-        );
     }
 
     /**
