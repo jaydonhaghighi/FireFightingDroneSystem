@@ -17,6 +17,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.text.SimpleDateFormat;
 import java.util.stream.Collectors;
 
+import models.MetricsTracker;
+
 import static models.FireEvent.createFireEventFromString;
 
 /**
@@ -298,6 +300,9 @@ public class Scheduler {
                 
                 fireWasExtinguished = true;
                 fireExtinguishedCount.incrementAndGet();
+                
+                // Record fire extinguished in metrics
+                MetricsTracker.getInstance().recordFireExtinguished(taskInfo.zoneId);
             }
             
             // Check if state or location changed
@@ -676,7 +681,14 @@ public class Scheduler {
             }
             
             log("Sending fire event to " + droneId + " for Zone " + fire.getZoneID());
-            return send(fire, port);
+            boolean result = send(fire, port);
+            
+            // If send was successful, record the drone response in metrics
+            if (result) {
+                MetricsTracker.getInstance().recordDroneResponse(fire.getZoneID());
+            }
+            
+            return result;
         } catch (Exception e) {
             logError("Error in sendToDrone for " + droneId, e);
             return false;
@@ -1129,6 +1141,9 @@ public class Scheduler {
                         
                         // Add to priority queue 
                         eventQueue.add(finalEvent);
+                        
+                        // Record fire detected in metrics
+                        MetricsTracker.getInstance().recordFireDetected(zoneId);
                         
                         // Track required drones based on severity
                         int dronesNeeded = getDronesNeededForSeverity(severity);

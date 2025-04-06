@@ -4,6 +4,7 @@ import models.DroneSpecifications;
 import models.DroneStatus;
 import models.FireEvent;
 import models.Location;
+import models.MetricsTracker;
 import models.Zone;
 
 import javax.swing.*;
@@ -35,6 +36,8 @@ public class DroneVisualization extends JFrame {
     private final int MARGIN = 70; // Increased margin around the map
     private MapPanel mapPanel;
     private JPanel infoPanel;
+    private JPanel metricsPanel;
+    private JLabel metricsLabel;
     private DroneVisualizationThread visualizationThread;
     private boolean isRunning = true;
 
@@ -67,14 +70,36 @@ public class DroneVisualization extends JFrame {
      */
     private void initUI() {
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(PANEL_WIDTH + 300, PANEL_HEIGHT + 50);
+        setSize(PANEL_WIDTH + 500, PANEL_HEIGHT + 50); // Adjusted width for split panel
         setLayout(new BorderLayout());
         
         // Create the map panel
         mapPanel = new MapPanel();
         add(mapPanel, BorderLayout.CENTER);
         
-        // Create the info panel for drone status with scrolling capability
+        // Create right side panel that will contain both metrics and drone status side by side
+        JPanel rightPanel = new JPanel();
+        rightPanel.setLayout(new BorderLayout()); // Use BorderLayout for more control
+        rightPanel.setPreferredSize(new Dimension(500, PANEL_HEIGHT)); // Reduced width
+        
+        // Create a top panel for metrics (won't span full height)
+        JPanel topRightPanel = new JPanel(new BorderLayout());
+        topRightPanel.setPreferredSize(new Dimension(500, 150)); // Fixed height for metrics
+        
+        // Create metrics panel (left side)
+        metricsPanel = new JPanel();
+        metricsPanel.setLayout(new BorderLayout());
+        metricsPanel.setBorder(BorderFactory.createTitledBorder("System Metrics"));
+        // No background color
+        
+        // Create metrics label with monospaced font
+        metricsLabel = new JLabel("Collecting metrics...", JLabel.LEFT);
+        metricsLabel.setFont(new Font("Monospaced", Font.PLAIN, 12)); // Plain black font
+        metricsLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Less padding
+        metricsLabel.setHorizontalAlignment(JLabel.LEFT); // Left alignment
+        metricsPanel.add(metricsLabel, BorderLayout.CENTER);
+        
+        // Create the info panel for drone status with scrolling capability (right side)
         infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
         
@@ -82,11 +107,24 @@ public class DroneVisualization extends JFrame {
         JScrollPane scrollPane = new JScrollPane(infoPanel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.setPreferredSize(new Dimension(300, PANEL_HEIGHT));
         scrollPane.setBorder(BorderFactory.createTitledBorder("Drone Status"));
         
-        // Add the scroll pane instead of the panel directly
-        add(scrollPane, BorderLayout.EAST);
+        // Add metrics panel to the top right panel
+        topRightPanel.add(metricsPanel, BorderLayout.CENTER);
+        
+        // Create a split panel to hold both side by side
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        splitPane.setLeftComponent(topRightPanel);
+        splitPane.setRightComponent(scrollPane);
+        splitPane.setDividerLocation(200); // Set initial divider position
+        splitPane.setDividerSize(5); // Thin divider
+        splitPane.setResizeWeight(0.4); // Give 40% weight to metrics panel
+        
+        // Add the split pane to the right panel
+        rightPanel.add(splitPane, BorderLayout.CENTER);
+        
+        // Add the right panel to the main frame
+        add(rightPanel, BorderLayout.EAST);
         
         // Show the frame
         setLocationRelativeTo(null);
@@ -102,7 +140,74 @@ public class DroneVisualization extends JFrame {
         javax.swing.SwingUtilities.invokeLater(() -> {
             mapPanel.repaint();
             updateInfoPanel();
+            updateMetricsPanel();
         });
+    }
+    
+    /**
+     * Updates the metrics panel with the latest metrics data
+     */
+    private void updateMetricsPanel() {
+        // Get metrics data from the MetricsTracker
+        MetricsTracker metrics = MetricsTracker.getInstance();
+        
+        // Format metrics with HTML for better styling - simpler left-aligned version
+        StringBuilder html = new StringBuilder();
+        html.append("<html><div style='width: 100%;'>");
+        
+        // Format fires data
+        long total = metrics.getTotalFiresDetected();
+        long extinguished = metrics.getTotalFiresExtinguished();
+        double percent = metrics.getFiresExtinguishedPercentage();
+        
+        // Fires section
+        html.append("<div style='margin: 2px 0;'>");
+        html.append("<b>Fires:</b> ");
+        html.append(extinguished).append("/").append(total);
+        html.append(" (").append(String.format("%.1f%%", percent)).append(")");
+        html.append("</div>");
+        
+        // Time section
+        html.append("<div style='margin: 2px 0;'>");
+        html.append("<b>Total time:</b> ");
+        html.append(formatMillis(metrics.getTotalSystemDuration()));
+        html.append("</div>");
+        
+        // Response time section
+        html.append("<div style='margin: 2px 0;'>");
+        html.append("<b>Avg response:</b> ");
+        html.append(formatMillis((long)metrics.getAverageResponseTime()));
+        html.append("</div>");
+        
+        // Extinguish time section
+        html.append("<div style='margin: 2px 0;'>");
+        html.append("<b>Avg extinguish:</b> ");
+        html.append(formatMillis((long)metrics.getAverageExtinguishTime()));
+        html.append("</div>");
+        
+        html.append("</div></html>"); // Close main div and HTML
+        
+        // Update the metrics label
+        metricsLabel.setText(html.toString());
+        metricsPanel.revalidate();
+        metricsPanel.repaint();
+    }
+    
+    /**
+     * Helper method to format milliseconds into a readable time string
+     */
+    private String formatMillis(long millis) {
+        if (millis < 0) return "N/A";
+        
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        seconds %= 60;
+        
+        if (minutes > 0) {
+            return String.format("%dm %ds", minutes, seconds);
+        } else {
+            return String.format("%ds", seconds);
+        }
     }
 
     /**
