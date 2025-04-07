@@ -93,22 +93,29 @@ public class FireIncidentSubsystem {
      * It continuously waits for and handles responses from the Scheduler.
      */
     public void readFile() {
-        // reads file (fire_events.txt)
+        // reads file (Final_event_file.csv)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
+            boolean isFirstLine = true;
 
             // read line by line
             while ((line = br.readLine()) != null) {
-                // split line by space
-                String[] parts = line.split(" ");
+                // Skip the header line
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    continue;
+                }
+                
+                // split line by comma
+                String[] parts = line.split(",");
 
                 String time = parts[0];
                 int zoneID = Integer.parseInt(parts[1]);
                 String eventType = parts[2];
                 String severity = parts[3];
                 
-                // Check if there's an error type specified in the line
-                String errorType = parts.length > 4 ? parts[4] : "NONE";
+                // Default error type to NONE if not present
+                String errorType = (parts.length > 4 && !parts[4].isEmpty()) ? parts[4] : "NONE";
                 
                 FireEvent event = new FireEvent(time, zoneID, eventType, severity, errorType);
 
@@ -133,7 +140,7 @@ public class FireIncidentSubsystem {
         try{
             InetAddress ip = InetAddress.getLocalHost();
 
-            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
+            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/Final_event_file.csv", ip);
             System.out.println(FireSystemColors.PURPLE + "[SYSTEM] Ready to send fire alerts" + FireSystemColors.RESET);
             
             fireSystem.readFile();
