@@ -125,16 +125,10 @@ public class FireIncidentSubsystem {
                 send(event);
                 receive();
 
-                // Add variable delays between fire events to simulate realistic timing
                 try {
-                    // Calculate a more realistic delay based on severity
-                    int delaySeconds = 1;
-
-                    // Display countdown to next fire - simplified
+                    int delaySeconds = 3;
                     System.out.println(FireSystemColors.CYAN + "Next fire in " + delaySeconds +
                             "s" + FireSystemColors.RESET);
-
-                    // Sleep without so many updates
                     Thread.sleep(delaySeconds * 1000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -149,14 +143,12 @@ public class FireIncidentSubsystem {
     public static void main(String[] args){
         try{
             InetAddress ip = InetAddress.getLocalHost();
-            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
 
+            FireIncidentSubsystem fireSystem = new FireIncidentSubsystem("src/main/resources/fire_events.txt", ip);
             System.out.println(FireSystemColors.PURPLE + "[SYSTEM] Ready to send fire alerts" + FireSystemColors.RESET);
             
-            // Read all fire events from the file
-            FireEvent fire = fireSystem.readFile();
+            fireSystem.readFile();
 
-            // After sending all events, keep listening for responses
             System.out.println(FireSystemColors.PURPLE + "\n[SYSTEM] All fire events processed. Monitoring..." + FireSystemColors.RESET);
             while (true) {
                 fireSystem.receive();

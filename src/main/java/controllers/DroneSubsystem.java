@@ -163,7 +163,7 @@ public class DroneSubsystem {
 
     /**
      * Receives a fire event from the scheduler
-     * @return The received fire event
+     * @return The received fire event or null if timeout/error
      */
     public FireEvent receive() {
         byte[] data = new byte[100];
@@ -174,7 +174,11 @@ public class DroneSubsystem {
             int len = receivePacket.getLength();
             String message = new String(data, 0, len);
             return createFireEventFromString(message);
+        } catch (SocketTimeoutException e) {
+            // This is expected with our timeout setting - silently return null
+            return null;
         } catch (IOException e) {
+            // Only print stack trace for non-timeout exceptions
             e.printStackTrace();
             return null;
         }
@@ -341,31 +345,10 @@ public class DroneSubsystem {
     }
 
     /**
-     * Clears the current error
-     */
-    public void clearError() {
-        this.currentError = ErrorType.NONE;
-    }
-
-    /**
      * Timer management methods
      */
     public void startMovementTimer() {
         this.movementStartTime = System.currentTimeMillis();
-    }
-
-    public boolean isMovementTimedOut() {
-        if (movementStartTime == 0) return false;
-        return (System.currentTimeMillis() - movementStartTime) > MAX_MOVEMENT_TIME;
-    }
-
-    public void startDropAgentTimer() {
-        this.dropAgentStartTime = System.currentTimeMillis();
-    }
-
-    public boolean isDropAgentTimedOut() {
-        if (dropAgentStartTime == 0) return false;
-        return (System.currentTimeMillis() - dropAgentStartTime) > MAX_DROP_AGENT_TIME;
     }
 
     public void resetTimers() {
@@ -435,10 +418,6 @@ public class DroneSubsystem {
         return specifications;
     }
 
-    public void setSpecifications(DroneSpecifications specifications) {
-        this.specifications = specifications;
-    }
-
     /**
      * Zone tracking methods that use DroneManager when possible
      * We keep the static implementation for backward compatibility
@@ -463,26 +442,90 @@ public class DroneSubsystem {
             drone.sendStatusUpdate();  // Initial status
 
             while (true) {
+                // Set socket timeout (it will be properly handled in receive())
+                try {
+                    drone.receiveSocket.setSoTimeout(250);
+                } catch (SocketException e) {
+                    System.err.println("[" + drone.getDroneId() + "] Error setting socket timeout: " + e.getMessage());
+                }
                 FireEvent event = drone.receive();
+                
                 if (event == null) {
                     continue;
                 }
                 
                 // Check if this drone should handle the event
                 if (shouldHandleEvent(drone, event)) {
-                    processEvent(drone, event);
-                    drone.sendStatusUpdate();
+                    int oldZoneId = drone.currentEvent != null ? drone.currentEvent.getZoneID() : -1;
+                    int newZoneId = event.getZoneID();
+                    boolean isRedirection = oldZoneId != -1 && oldZoneId != newZoneId;
+                    
+                    // Handle redirection
+                    if (isRedirection && (drone.getCurrentStateName().equals("EnRoute") || 
+                                          drone.getCurrentStateName().equals("DroppingAgent"))) {
+                        
+                        System.out.println("[" + drone.getDroneId() + "] REDIRECTION RECEIVED from zone " + 
+                            oldZoneId + " to zone " + newZoneId);
+                        
+                        // This is a redirection - stop current mission and re-target
+                        drone.fireEventQueue.clear(); // Clear any queued events
+                        drone.currentEvent = event;   // Set this as our current event
+                        
+                        // Update target location and send status update
+                        Location newTarget = getZoneLocation(event.getZoneID());
+                        drone.setTargetLocation(newTarget);
+                        drone.setState(new EnRoute()); // Reset state to EnRoute
+                        drone.sendStatusUpdate();
+                        
+                        // Process the new event
+                        processEvent(drone, event);
+                        drone.sendStatusUpdate();
+                    } else {
+                        // Normal event handling
+                        processEvent(drone, event);
+                        drone.sendStatusUpdate();
+                    }
                 }
             }
         } catch (Exception e) {
+            // Log the error, but don't terminate the drone thread
+            System.err.println("[" + drone.getDroneId() + "] Error in main loop: " + e.getMessage());
             e.printStackTrace();
+            
+            // Attempt to recover
+            try {
+                Thread.sleep(1000);
+                drone.sendStatusUpdate();
+            } catch (Exception ex) {
+                // Ignore recovery errors
+            }
         }
     }
     
     /**
      * Determine if this drone should handle the given event
      */
+    private boolean shouldHandleEvent(FireEvent event) {
+        String primaryDroneId = event.getAssignedDroneId();
+        return primaryDroneId == null || 
+               primaryDroneId.equals(droneId) || 
+               event.isDroneAssigned(droneId);
+    }
+    
+    /**
+     * Determine if this drone should handle the given event
+     */
     private static boolean shouldHandleEvent(DroneSubsystem drone, FireEvent event) {
+        // First check if using the instance method is possible
+        if (drone != null) {
+            try {
+                return drone.shouldHandleEvent(event);
+            } catch (Exception e) {
+                // Fall back to static implementation
+            }
+        }
+        
+        // Static implementation as fallback
         String primaryDroneId = event.getAssignedDroneId();
         String thisDroneId = drone.getDroneId();
         
@@ -501,6 +544,10 @@ public class DroneSubsystem {
         int dronesNeeded = getRequiredDronesForSeverity(severity);
         int currentDrops = getDropsForZone(zoneId);
         
+        // Store the original event zone ID to check for redirections
+        int originalZoneId = drone.currentEvent != null ? drone.currentEvent.getZoneID() : -1;
+        boolean isRedirection = (originalZoneId != -1 && originalZoneId != zoneId);
+        
         // Check if fire is already extinguished before starting mission
         if (currentDrops >= dronesNeeded) {
             drone.setCurrentLocation(drone.getBaseLocation());
@@ -510,22 +557,47 @@ public class DroneSubsystem {
             return;
         }
 
+        // Clear any previously queued events - this is important for redirection
+        if (isRedirection) {
+            System.out.println("[" + drone.getDroneId() + "] REDIRECTING from zone " + 
+                originalZoneId + " to zone " + zoneId);
+            drone.fireEventQueue.clear();
+        }
+
         // Initialize mission parameters
         drone.setTargetLocation(zoneLocation);
         drone.currentEvent = event;
-        drone.scheduleFireEvent(event);
-
-        // Travel to fire location
-        simulateMovement(drone, zoneLocation);
         
+        // Only schedule if not a redirection - redirection is handled directly
+        if (!isRedirection) {
+            drone.scheduleFireEvent(event);
+        }
+
+        // Dispatch delay - 2 seconds to prepare for mission
+        System.out.println("[" + drone.getDroneId() + "] Preparing for dispatch (2s)...");
+        Thread.sleep(2000);
+        
+        // Travel to fire location
+        boolean movementCompleted = simulateMovement(drone, zoneLocation);
+        
+        // Verify that we're still working on the same task
+        // If the drone was redirected, we will now be at the redirected location,
+        // but we need to check if the current task is still this zone
+        zoneId = drone.currentEvent != null ? drone.currentEvent.getZoneID() : zoneId;
+        zoneLocation = getZoneLocation(zoneId);
+        severity = drone.currentEvent != null ? drone.currentEvent.getSeverity() : severity;
+        dronesNeeded = getRequiredDronesForSeverity(severity);
+
         // Check again if fire still needs attention upon arrival
         if (getDropsForZone(zoneId) >= dronesNeeded) {
             returnToBase(drone);
             return;
         }
 
-        // Drop firefighting agent
+        // Drop firefighting agent - 1 second to drop agent
         drone.setCurrentLocation(zoneLocation);
+        System.out.println("[" + drone.getDroneId() + "] Dropping fire suppression agent (1s)...");
+        Thread.sleep(1000);
         drone.dropAgent();
 
         // Update fire status and notify if extinguished
@@ -546,11 +618,23 @@ public class DroneSubsystem {
     private static void returnToBase(DroneSubsystem drone) throws InterruptedException {
         drone.setTargetLocation(drone.getBaseLocation());
         drone.returningBack();
-        simulateMovement(drone, drone.getBaseLocation());
+        
+        // Check if we actually reached the base (movement wasn't interrupted)
+        boolean reachedBase = simulateMovement(drone, drone.getBaseLocation());
+        
+        if (!reachedBase) {
+            // Movement was interrupted - don't complete the mission
+            System.out.println("[" + drone.getDroneId() + "] Return to base interrupted - likely redirected");
+            return;
+        }
         
         drone.setCurrentLocation(drone.getBaseLocation());
-        // Refill capacity when arriving back to base
+        
+        // Refill capacity when arriving back to base - 3 seconds to refill
+        System.out.println("[" + drone.getDroneId() + "] Refilling capacity at base (3s)...");
+        Thread.sleep(3000);
         drone.getSpecifications().refill();
+        
         drone.currentEvent = null;
         drone.taskCompleted();
     }
@@ -591,17 +675,19 @@ public class DroneSubsystem {
 
     /**
      * Simulate drone movement with visualization
+     * Returns true if the movement completed normally, false if it was interrupted by redirection
      */
-    private static void simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
+    private static boolean simulateMovement(DroneSubsystem drone, Location targetLocation) throws InterruptedException {
         Location currentLocation = drone.getCurrentLocation();
         int distance = currentLocation.distanceTo(targetLocation);
+        int originalZoneId = drone.currentEvent != null ? drone.currentEvent.getZoneID() : -1;
         
         drone.startMovementTimer();
         
         // Skip if already at target
         if (distance == 0) {
             drone.resetTimers();
-            return;
+            return true;
         }
 
         // Calculate travel time based on drone speed
@@ -620,12 +706,6 @@ public class DroneSubsystem {
         }
 
         // Use a much more gradual movement approach
-        // The key issue is probably that we're sending too many status updates
-        // causing network congestion
-        
-        // Calculate a reasonable number of updates to send 
-        // Rather than basing it on distance, we'll use a time-based approach
-        // aiming for around 20 updates per second
         int desiredFramerate = 20; // frames per second for status updates
         int totalUpdates = (travelTimeMs / 1000) * desiredFramerate;
         totalUpdates = Math.max(10, totalUpdates); // Ensure at least 10 updates
@@ -640,11 +720,48 @@ public class DroneSubsystem {
         
         // Keep track of when we last sent an update
         long lastUpdateTime = System.currentTimeMillis();
+        long lastCheckTime = System.currentTimeMillis();
         long startTime = lastUpdateTime;
         long endTime = startTime + travelTimeMs;
         
+        // Set timeout for quick packet checks (100ms)
+        try {
+            drone.receiveSocket.setSoTimeout(100);
+        } catch (SocketException e) {
+            System.err.println("[" + drone.getDroneId() + "] Error setting socket timeout: " + e.getMessage());
+        }
+        
         // Update position based on elapsed time for smoother motion
         while (System.currentTimeMillis() < endTime) {
+            // Check for redirection by comparing current task zone with original zone
+            if (drone.currentEvent != null && originalZoneId != -1 && 
+                drone.currentEvent.getZoneID() != originalZoneId) {
+                // Redirection detected - target has changed
+                System.out.println("[" + drone.getDroneId() + "] REDIRECTED from zone " + 
+                    originalZoneId + " to zone " + drone.currentEvent.getZoneID());
+                
+                // Instead of returning, continue with the new target
+                Location newTarget = getZoneLocation(drone.currentEvent.getZoneID());
+                drone.setTargetLocation(newTarget);
+                
+                // Reset movement parameters
+                currentLocation = drone.getCurrentLocation();
+                targetLocation = newTarget;
+                distance = currentLocation.distanceTo(targetLocation);
+                originalZoneId = drone.currentEvent.getZoneID();
+                
+                // Reset timers
+                travelTimeMs = specs.calculateTravelTime(distance);
+                startTime = System.currentTimeMillis();
+                endTime = startTime + travelTimeMs;
+                lastUpdateTime = startTime;
+                lastCheckTime = startTime;
+                
+                // Send status update with new target
+                drone.sendStatusUpdate();
+                continue;
+            }
+            
             long currentTime = System.currentTimeMillis();
             double progress = (double)(currentTime - startTime) / travelTimeMs;
             progress = Math.min(1.0, progress); // Ensure we don't exceed 1.0
@@ -662,6 +779,64 @@ public class DroneSubsystem {
                 lastUpdateTime = currentTime;
             }
             
+            // Check for redirection events (at most every 250ms to avoid excessive checking)
+            if (currentTime - lastCheckTime >= 250) {
+                FireEvent event = drone.receive(); // This will return null on timeout
+                
+                // If we received a redirection event, handle it directly here
+                if (event != null && shouldHandleEvent(drone, event) && 
+                    event.getZoneID() != originalZoneId) {
+                    System.out.println("[" + drone.getDroneId() + "] RECEIVED REDIRECTION from zone " + 
+                        originalZoneId + " to zone " + event.getZoneID());
+                    
+                    // Update drone task and target
+                    FireEvent oldEvent = drone.currentEvent;
+                    drone.currentEvent = event;
+                    drone.fireEventQueue.clear();
+                    
+                    // Set the target to the new location
+                    Location newTarget = getZoneLocation(event.getZoneID());
+                    drone.setTargetLocation(newTarget);
+                    
+                    try {
+                        // Send a notification about abandoning the previous fire so a replacement drone can be sent
+                        if (oldEvent != null) {
+                            // Format a special status update that tells Scheduler this fire still needs attention
+                            String message = drone.getDroneId() + " EnRoute ABANDONED:" + oldEvent.getZoneID() + 
+                                           " NEW_TASK:" + event.getZoneID() + " " +
+                                           drone.getCurrentLocation().getX() + " " +
+                                           drone.getCurrentLocation().getY();
+                            drone.send(message, 6001);
+                        }
+                    } catch (Exception e) {
+                        // Just log error and continue
+                        System.err.println("[" + drone.getDroneId() + "] Error sending abandonment notification: " + e.getMessage());
+                    }
+                    
+                    // Start movement to the new location immediately instead of returning
+                    // So we immediately start moving toward the new target
+                    currentLocation = drone.getCurrentLocation(); // Get current position
+                    targetLocation = newTarget;                   // Update target
+                    distance = currentLocation.distanceTo(targetLocation); // Recalculate distance
+                    originalZoneId = event.getZoneID();          // Update original zone
+                    
+                    // Reset the movement timers
+                    travelTimeMs = specs.calculateTravelTime(distance);
+                    startTime = System.currentTimeMillis();
+                    endTime = startTime + travelTimeMs;
+                    lastUpdateTime = startTime;
+                    lastCheckTime = startTime;
+                    
+                    // Send a status update with the new target
+                    drone.sendStatusUpdate();
+                    
+                    // Continue the movement loop with the new target
+                    continue;
+                }
+                
+                lastCheckTime = currentTime;
+            }
+            
             // Short sleep to prevent high CPU usage
             Thread.sleep(stepDelayMs);
         }
@@ -670,6 +845,7 @@ public class DroneSubsystem {
         drone.setCurrentLocation(targetLocation);
         drone.sendStatusUpdate();
         drone.resetTimers();
+        return true;
     }
 
     /**
@@ -677,7 +853,7 @@ public class DroneSubsystem {
      */
     public static void main(String[] args) {
         try {
-            final int NUM_DRONES = 10;
+            final int NUM_DRONES = 5;
             Thread[] threads = new Thread[NUM_DRONES];
             InetAddress localHost = InetAddress.getLocalHost();
 
