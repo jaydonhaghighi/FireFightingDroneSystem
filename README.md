@@ -30,10 +30,10 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 
 - `Brendan:` Updated State Machine diagram to include fault states, Re-implemented error injection, Debugging
 - `Abolarinwa:` Metrics
-- `Zeena:`
+- `Zeena:` Updated sequence daigram and wrote out testing instructions
 - `Jaydon:` Implemented UI and Metrics
 - `Raiqah:` Updated UML Class diagram with new changes, Metrics
-- `Leen:` 
+- `Leen:` Updated sequence daigram and wrote out testing instructions
 
 
 ---
