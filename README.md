@@ -29,9 +29,9 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 ## Team Contributions
 
 - `Brendan:` Updated State Machine diagram to include fault states, Re-implemented error injection, Debugging
-- `Abolarinwa:` 
+- `Abolarinwa:` Metrics implementation
 - `Zeena:`Updated sequence diagram and wrote out testing instructions
-- `Jaydon:` 
+- `Jaydon:` UI and metrics implementation
 - `Raiqah:` Updated UML Class diagram with new changes
 - `Leen:` Updated sequence diagram and wrote out testing instructions
 
