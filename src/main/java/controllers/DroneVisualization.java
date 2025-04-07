@@ -82,24 +82,24 @@ public class DroneVisualization extends JFrame {
         rightPanel.setLayout(new BorderLayout()); // Use BorderLayout for more control
         rightPanel.setPreferredSize(new Dimension(500, PANEL_HEIGHT)); // Reduced width
         
-        // Create a top panel for metrics (won't span full height)
+        // Create a top panel for metrics
         JPanel topRightPanel = new JPanel(new BorderLayout());
         topRightPanel.setPreferredSize(new Dimension(500, 150)); // Fixed height for metrics
         
-        // Create metrics panel (left side)
+        // Create metrics panel
         metricsPanel = new JPanel();
         metricsPanel.setLayout(new BorderLayout());
         metricsPanel.setBorder(BorderFactory.createTitledBorder("System Metrics"));
         // No background color
         
-        // Create metrics label with monospaced font
+        // Create metrics label
         metricsLabel = new JLabel("Collecting metrics...", JLabel.LEFT);
         metricsLabel.setFont(new Font("Monospaced", Font.PLAIN, 12)); // Plain black font
         metricsLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Less padding
         metricsLabel.setHorizontalAlignment(JLabel.LEFT); // Left alignment
         metricsPanel.add(metricsLabel, BorderLayout.CENTER);
         
-        // Create the info panel for drone status with scrolling capability (right side)
+        // Create the info panel for drone status with scrolling
         infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
         
@@ -116,9 +116,9 @@ public class DroneVisualization extends JFrame {
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setLeftComponent(topRightPanel);
         splitPane.setRightComponent(scrollPane);
-        splitPane.setDividerLocation(200); // Set initial divider position
-        splitPane.setDividerSize(5); // Thin divider
-        splitPane.setResizeWeight(0.4); // Give 40% weight to metrics panel
+        splitPane.setDividerLocation(200);
+        splitPane.setDividerSize(5);
+        splitPane.setResizeWeight(0.4);
         
         // Add the split pane to the right panel
         rightPanel.add(splitPane, BorderLayout.CENTER);

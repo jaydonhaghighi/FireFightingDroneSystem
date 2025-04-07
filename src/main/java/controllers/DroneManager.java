@@ -279,6 +279,9 @@ public class DroneManager {
      * Before assigning, checks the highest priority zone with active fire
      * and assigns the drone to that zone if higher priority.
      * 
+     * If redirectMidFlight is true, also considers drones that are en route to other fires
+     * and may redirect them to higher priority fires.
+     * 
      * @param event the original fire event
      * @param assignedDroneIds set of drone IDs already assigned
      * @param findHighestPriority whether to find and potentially redirect to highest priority fire 
@@ -290,7 +293,11 @@ public class DroneManager {
             DroneStatus selectedDrone = selectBestDroneForEvent(event);
             
             if (selectedDrone == null) {
-                return null;
+                // If no idle drones are available, look for en-route drones that could be redirected
+                selectedDrone = findRedirectableDrone(event);
+                if (selectedDrone == null) {
+                    return null;
+                }
             }
             
             String droneId = selectedDrone.getDroneId();
@@ -300,8 +307,11 @@ public class DroneManager {
                 return null;
             }
             
-            // Check if drone is still available (could have changed state concurrently)
-            if (!selectedDrone.isAvailable()) {
+            // If the drone is en-route, we're considering it for redirection
+            // Otherwise, make sure it's available
+            if (!(selectedDrone.getState().equalsIgnoreCase("ENROUTE") || 
+                  selectedDrone.getState().equalsIgnoreCase("EnRoute")) && 
+                !selectedDrone.isAvailable()) {
                 return null;
             }
             
@@ -335,11 +345,21 @@ public class DroneManager {
             int originalZoneId = event.getZoneID();
             String originalSeverity = event.getSeverity();
             
+            // If the drone is en-route, compare with its current task
+            if (selectedDrone.getState().equalsIgnoreCase("ENROUTE") || 
+                selectedDrone.getState().equalsIgnoreCase("EnRoute")) {
+                FireEvent currentTask = selectedDrone.getCurrentTask();
+                if (currentTask != null) {
+                    originalZoneId = currentTask.getZoneID();
+                    originalSeverity = currentTask.getSeverity();
+                }
+            }
+            
             // If the highest priority zone is different and has higher severity, redirect the drone
             if (hasActiveFire && highestPriorityZoneId != originalZoneId && 
                 getSeverityWeight(highestPrioritySeverity) > getSeverityWeight(originalSeverity)) {
                 
-                // Check if the zone is already has enough drones
+                // Check if the zone already has enough drones
                 int dronesNeeded = getDronesNeededForSeverity(highestPrioritySeverity);
                 int dronesAssigned = countDronesForZone(highestPriorityZoneId);
                 
@@ -357,6 +377,46 @@ public class DroneManager {
         } catch (Exception e) {
             return null;
         }
+    }
+    
+    /**
+     * Finds a drone that's currently en route to a fire but should be redirected
+     * to a higher priority fire. Considers severity and proximity.
+     * 
+     * @param event The fire event needing a drone
+     * @return A drone that can be redirected, or null if none found
+     */
+    private DroneStatus findRedirectableDrone(FireEvent event) {
+        // Only look for redirectable drones if this event is high severity
+        if (!event.getSeverity().equalsIgnoreCase("High")) {
+            return null;
+        }
+        
+        // Get the location of this fire
+        int zoneId = event.getZoneID();
+        Location fireLocation = getLocationForZone(zoneId);
+        
+        // Find drones that are en route to lower priority fires
+        List<DroneStatus> redirectableDrones = drones.values().stream()
+            .filter(drone -> 
+                (drone.getState().equalsIgnoreCase("ENROUTE") || 
+                 drone.getState().equalsIgnoreCase("EnRoute")) && 
+                drone.getCurrentTask() != null)
+            .filter(drone -> {
+                // Only redirect from lower priority to higher priority
+                FireEvent currentTask = drone.getCurrentTask();
+                return getSeverityWeight(event.getSeverity()) > 
+                       getSeverityWeight(currentTask.getSeverity());
+            })
+            .sorted(Comparator.comparingInt(drone -> drone.distanceTo(fireLocation)))
+            .toList();
+        
+        if (redirectableDrones.isEmpty()) {
+            return null;
+        }
+        
+        // Return the closest redirectable drone
+        return redirectableDrones.get(0);
     }
     
     /**
