@@ -573,6 +573,10 @@ public class DroneSubsystem {
             drone.scheduleFireEvent(event);
         }
 
+        // Dispatch delay - 2 seconds to prepare for mission
+        System.out.println("[" + drone.getDroneId() + "] Preparing for dispatch (2s)...");
+        Thread.sleep(2000);
+        
         // Travel to fire location
         boolean movementCompleted = simulateMovement(drone, zoneLocation);
         
@@ -590,8 +594,10 @@ public class DroneSubsystem {
             return;
         }
 
-        // Drop firefighting agent
+        // Drop firefighting agent - 1 second to drop agent
         drone.setCurrentLocation(zoneLocation);
+        System.out.println("[" + drone.getDroneId() + "] Dropping fire suppression agent (1s)...");
+        Thread.sleep(1000);
         drone.dropAgent();
 
         // Update fire status and notify if extinguished
@@ -623,8 +629,12 @@ public class DroneSubsystem {
         }
         
         drone.setCurrentLocation(drone.getBaseLocation());
-        // Refill capacity when arriving back to base
+        
+        // Refill capacity when arriving back to base - 3 seconds to refill
+        System.out.println("[" + drone.getDroneId() + "] Refilling capacity at base (3s)...");
+        Thread.sleep(3000);
         drone.getSpecifications().refill();
+        
         drone.currentEvent = null;
         drone.taskCompleted();
     }
