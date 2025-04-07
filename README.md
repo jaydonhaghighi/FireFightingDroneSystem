@@ -23,7 +23,7 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - **Fault Detection & Recovery**: Detects movement timeouts, nozzle jams, door stuck conditions and sensor failures
 - **Hardware Fault Simulation**: Simulates critical drone hardware failures
 - **Timing Diagrams**: Generates comprehensive timing reports for drone operations
-- **Multi-Drone Fire Response**: Dispatches multiple drones for higher severity fires
+- **Multi-Drone Fire Response**: Dispatches multiple drones for higher severity fires (10 Drones)
 
 ---
 ## Team Contributions
@@ -31,8 +31,8 @@ Fire events are detected by the FireIncidentSubsystem, coordinated by a central 
 - `Brendan:` Updated State Machine diagram to include fault states, Re-implemented error injection, Debugging
 - `Abolarinwa:` 
 - `Zeena:`
-- `Jaydon:` 
-- `Raiqah:` Updated UML Class diagram with new changes
+- `Jaydon:` Implemented UI and Metrics
+- `Raiqah:` Updated UML Class diagram with new changes, Metrics
 - `Leen:` 
 
 
