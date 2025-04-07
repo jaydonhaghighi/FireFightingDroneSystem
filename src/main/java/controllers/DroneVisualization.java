@@ -216,8 +216,8 @@ public class DroneVisualization extends JFrame {
     private void updateInfoPanel() {
         infoPanel.removeAll();
         
-        // Get all drones
-        Collection<DroneStatus> drones = droneManager.getAllDrones();
+        // Get all drones (thread-safe copy)
+        List<DroneStatus> drones = new ArrayList<>(droneManager.getAllDrones());
         
         if (drones.isEmpty()) {
             JLabel emptyLabel = new JLabel("No drones registered");
@@ -353,8 +353,8 @@ public class DroneVisualization extends JFrame {
             infoPanel.add(fireHeaderPanel);
             infoPanel.add(Box.createVerticalStrut(10));
             
-            // Display active fire zones
-            Map<Integer, Zone> zones = droneManager.getAllZones();
+            // Display active fire zones (thread-safe copy)
+            Map<Integer, Zone> zones = new HashMap<>(droneManager.getAllZones());
             List<Zone> activeFireZones = zones.values().stream()
                 .filter(Zone::hasFire)
                 .sorted(Comparator.comparing(Zone::getId))
@@ -392,9 +392,10 @@ public class DroneVisualization extends JFrame {
                     // Add drones needed information
                     int dronesNeeded = getDronesNeededForSeverity(zone.getSeverity());
                     
-                    // Find assigned drones for this zone
+                    // Find assigned drones for this zone (thread-safe copy) 
                     int assignedDrones = 0;
-                    for (DroneStatus drone : droneManager.getAllDrones()) {
+                    List<DroneStatus> zoneDrones = new ArrayList<>(droneManager.getAllDrones());
+                    for (DroneStatus drone : zoneDrones) {
                         FireEvent event = drone.getCurrentTask();
                         if (event != null && event.getZoneID() == zone.getId()) {
                             assignedDrones++;
@@ -541,8 +542,10 @@ public class DroneVisualization extends JFrame {
             
             // Get the bounds of all zones to determine the scale
             int maxX = 0, maxY = 0;
-            Map<Integer, Zone> zones = droneManager.getAllZones();
-            Collection<DroneStatus> drones = droneManager.getAllDrones();
+            
+            // Create thread-safe copies of collections before iterating
+            Map<Integer, Zone> zones = new HashMap<>(droneManager.getAllZones());
+            List<DroneStatus> drones = new ArrayList<>(droneManager.getAllDrones());
             
             // Get the actual boundaries of all zones
             int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
@@ -634,6 +637,7 @@ public class DroneVisualization extends JFrame {
                     int assignedDrones = 0;
                     int dronesNeeded = getDronesNeededForSeverity(zone.getSeverity());
                     
+                    // Use our thread-safe copy of drones
                     for (DroneStatus drone : drones) {
                         FireEvent event = drone.getCurrentTask();
                         if (event != null && event.getZoneID() == zone.getId()) {
@@ -681,7 +685,7 @@ public class DroneVisualization extends JFrame {
             g2d.fillRect(baseX - 10, baseY - 10, 20, 20);
             g2d.drawString("BASE", baseX - 15, baseY + 25);
             
-            // Draw drones
+            // Draw drones (we're already using our thread-safe copy created earlier)
             for (DroneStatus drone : drones) {
                 Location loc = drone.getCurrentLocation();
                 int x = MARGIN + (int)((loc.getX() - minX) * scale);
