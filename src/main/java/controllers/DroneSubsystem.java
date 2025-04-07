@@ -345,31 +345,10 @@ public class DroneSubsystem {
     }
 
     /**
-     * Clears the current error
-     */
-    public void clearError() {
-        this.currentError = ErrorType.NONE;
-    }
-
-    /**
      * Timer management methods
      */
     public void startMovementTimer() {
         this.movementStartTime = System.currentTimeMillis();
-    }
-
-    public boolean isMovementTimedOut() {
-        if (movementStartTime == 0) return false;
-        return (System.currentTimeMillis() - movementStartTime) > MAX_MOVEMENT_TIME;
-    }
-
-    public void startDropAgentTimer() {
-        this.dropAgentStartTime = System.currentTimeMillis();
-    }
-
-    public boolean isDropAgentTimedOut() {
-        if (dropAgentStartTime == 0) return false;
-        return (System.currentTimeMillis() - dropAgentStartTime) > MAX_DROP_AGENT_TIME;
     }
 
     public void resetTimers() {
@@ -437,10 +416,6 @@ public class DroneSubsystem {
 
     public DroneSpecifications getSpecifications() {
         return specifications;
-    }
-
-    public void setSpecifications(DroneSpecifications specifications) {
-        this.specifications = specifications;
     }
 
     /**
@@ -608,8 +583,7 @@ public class DroneSubsystem {
         zoneLocation = getZoneLocation(zoneId);
         severity = drone.currentEvent != null ? drone.currentEvent.getSeverity() : severity;
         dronesNeeded = getRequiredDronesForSeverity(severity);
-        currentDrops = getDropsForZone(zoneId);
-        
+
         // Check again if fire still needs attention upon arrival
         if (getDropsForZone(zoneId) >= dronesNeeded) {
             returnToBase(drone);
