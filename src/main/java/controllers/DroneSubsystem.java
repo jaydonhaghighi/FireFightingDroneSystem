@@ -852,7 +852,7 @@ public class DroneSubsystem {
      */
     public static void main(String[] args) {
         try {
-            final int NUM_DRONES = 5;
+            final int NUM_DRONES = 10;
             Thread[] threads = new Thread[NUM_DRONES];
             InetAddress localHost = InetAddress.getLocalHost();
 
