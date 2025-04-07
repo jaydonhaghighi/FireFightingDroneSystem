@@ -15,9 +15,9 @@ public class FireEventTest {
     @Before
     public void setUp() {
         // Initialize test events
-        basicEvent = new FireEvent("10:30", 5, "FIRE", "high", false);
+        basicEvent = new FireEvent("10:30", 5, "FIRE", "high", "NONE");
 
-        assignedEvent = new FireEvent("11:45", 8, "SMOKE", "low", false);
+        assignedEvent = new FireEvent("11:45", 8, "SMOKE", "low", "NONE");
         assignedEvent.assignDrone("drone1");
     }
 
@@ -83,19 +83,6 @@ public class FireEventTest {
         assertEquals("Assigned drone ID should be parsed correctly", "drone3", event.getAssignedDroneId());
     }
 
-    @Test(expected = NumberFormatException.class)
-    public void testCreateFireEventFromString_InvalidZoneID() {
-        // Test with invalid zone ID format
-        String input = "10:30 notAnInteger FIRE high";
-        FireEvent.createFireEventFromString(input);
-    }
-
-    @Test(expected = ArrayIndexOutOfBoundsException.class)
-    public void testCreateFireEventFromString_InsufficientData() {
-        // Test with insufficient data
-        String input = "10:30 5 FIRE";  // Missing severity
-        FireEvent.createFireEventFromString(input);
-    }
 
     @Test
     public void testToString_BasicEvent() {

@@ -2,11 +2,15 @@ package controllers;
 
 import models.FireEvent;
 
-import javax.xml.crypto.Data;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
 
 /**
  * ANSI colors for console output
@@ -97,8 +101,12 @@ public class FireIncidentSubsystem {
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
             boolean isFirstLine = true;
+            String previousTimeString = null;
+            
+            // List to hold all events
+            List<FireEvent> events = new ArrayList<>();
 
-            // read line by line
+            // read all lines and parse events
             while ((line = br.readLine()) != null) {
                 // Skip the header line
                 if (isFirstLine) {
@@ -109,7 +117,7 @@ public class FireIncidentSubsystem {
                 // split line by comma
                 String[] parts = line.split(",");
 
-                String time = parts[0];
+                String timeString = parts[0];
                 int zoneID = Integer.parseInt(parts[1]);
                 String eventType = parts[2];
                 String severity = parts[3];
@@ -117,22 +125,75 @@ public class FireIncidentSubsystem {
                 // Default error type to NONE if not present
                 String errorType = (parts.length > 4 && !parts[4].isEmpty()) ? parts[4] : "NONE";
                 
-                FireEvent event = new FireEvent(time, zoneID, eventType, severity, errorType);
-
+                FireEvent event = new FireEvent(timeString, zoneID, eventType, severity, errorType);
+                events.add(event);
+            }
+            
+            // Sort events by time if there are multiple events
+            events.sort(Comparator.comparing(FireEvent::getTime));
+            
+            System.out.println(FireSystemColors.PURPLE + "[SYSTEM] Loaded " + events.size() + 
+                " fire events to process" + FireSystemColors.RESET);
+            
+            // Process events with proper timing
+            for (int i = 0; i < events.size(); i++) {
+                FireEvent event = events.get(i);
+                String currentTimeString = event.getTime();
+                
+                // Calculate delay based on time difference, but only if not the first event
+                if (previousTimeString != null) {
+                    try {
+                        // Parse times (assuming format HH:MM:SS)
+                        SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
+                        Date currentTime = format.parse(currentTimeString);
+                        Date previousTime = format.parse(previousTimeString);
+                        
+                        // Calculate time difference in seconds
+                        long diffMillis = currentTime.getTime() - previousTime.getTime();
+                        
+                        // Handle case where current time is earlier (might happen if crossing midnight)
+                        if (diffMillis < 0) {
+                            diffMillis += 24 * 60 * 60 * 1000; // Add a day worth of milliseconds
+                        }
+                        
+                        // Convert real-time difference to simulation time (scale down by a factor)
+                        // We'll use a 180:1 ratio (3 minutes in real time = 1 second in simulation)
+                        long delaySeconds = diffMillis / (1000 * 180);
+                        
+                        // Apply a reasonable cap to prevent excessive delays
+                        if (delaySeconds > 10) {
+                            delaySeconds = 10;
+                        }
+                        
+                        // Ensure at least 2 seconds delay between events
+                        if (delaySeconds < 1) {
+                            delaySeconds = 1;
+                        }
+                        
+                        if (delaySeconds > 0) {
+                            System.out.println(FireSystemColors.GREEN + "Waiting " + delaySeconds +
+                                "s until next fire at " + currentTimeString + FireSystemColors.RESET);
+                            Thread.sleep(delaySeconds * 1000);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[FireIncidentSubsystem] Error parsing time: " + e.getMessage());
+                        // Default delay if time parsing fails
+                        Thread.sleep(2000);
+                    }
+                }
+                
+                // Send the event
                 send(event);
                 receive();
-
-                try {
-                    int delaySeconds = 3;
-                    System.out.println(FireSystemColors.GREEN + "Next fire in " + delaySeconds +
-                            "s" + FireSystemColors.RESET);
-                    Thread.sleep(delaySeconds * 1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                
+                // Remember this time for the next iteration
+                previousTimeString = currentTimeString;
             }
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

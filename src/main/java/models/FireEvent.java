@@ -253,8 +253,10 @@ public class FireEvent {
             sb.append(" ").append(assignedDroneId);
         }
 
-        // Add error information
-        sb.append(" ").append(error);
+        // Add error information only if it's not NONE
+        if (error != ErrorType.NONE) {
+            sb.append(" ").append(error);
+        }
 
         return sb.toString();
     }

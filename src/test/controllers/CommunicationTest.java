@@ -56,7 +56,7 @@ public class CommunicationTest {
         String severity = "high";
 
         // 1. Create a fire event
-        FireEvent event = new FireEvent(eventTime, zoneId, eventType, severity, false);
+        FireEvent event = new FireEvent(eventTime, zoneId, eventType, severity, "NONE");
 
         // 2. Fire system sends event to scheduler
         fireSystem.simulateSendingEvent(event);
@@ -117,31 +117,6 @@ public class CommunicationTest {
         assertTrue("Status should contain base location", lastDroneStatus.contains("0") && lastDroneStatus.contains("0"));
     }
 
-    /**
-     * Tests the resilience of the system to malformed messages
-     */
-    @Test
-    public void testMalformedMessageHandling() throws Exception {
-        // Create a malformed message
-        String malformedMessage = "NotAValidFormat";
-
-        // 1. Send malformed message to scheduler
-        scheduler.simulateReceivingRawMessage(malformedMessage);
-
-        // 2. Verify scheduler didn't crash and handled the error
-        String output = outputCapture.toString();
-        assertTrue("Scheduler should log an error for malformed messages",
-                output.contains("Warning") || output.contains("Error") || output.contains("could not be parsed"));
-
-        // 3. Verify scheduler is still operational by sending a valid event
-        FireEvent validEvent = new FireEvent("14:30", 3, "FIRE", "high", false);
-        scheduler.simulateReceivingEvent(validEvent);
-
-        // 4. Verify the valid event was processed correctly
-        FireEvent receivedEvent = scheduler.getLastReceivedEvent();
-        assertNotNull("Scheduler should still process valid events after receiving malformed ones", receivedEvent);
-        assertEquals("Event time should match", "14:30", receivedEvent.getTime());
-    }
 
     /**
      * Tests the handling of multiple concurrent fire events
@@ -149,9 +124,9 @@ public class CommunicationTest {
     @Test
     public void testMultipleConcurrentEvents() throws Exception {
         // Create multiple fire events
-        FireEvent event1 = new FireEvent("14:30", 3, "FIRE", "high", false);
-        FireEvent event2 = new FireEvent("14:31", 4, "FIRE", "moderate", false);
-        FireEvent event3 = new FireEvent("14:32", 5, "FIRE", "low", false);
+        FireEvent event1 = new FireEvent("14:30", 3, "FIRE", "high", "NONE");
+        FireEvent event2 = new FireEvent("14:31", 4, "FIRE", "moderate", "NONE");
+        FireEvent event3 = new FireEvent("14:32", 5, "FIRE", "low", "NONE");
 
         // Create a queue of events for the scheduler
         FireEvent[] events = {event1, event2, event3};

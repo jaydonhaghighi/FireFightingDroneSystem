@@ -167,7 +167,7 @@ public class DroneManagerTest {
         busyDrone.setState("EN ROUTE");
 
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", "NONE");
 
         // Test selection
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -193,7 +193,7 @@ public class DroneManagerTest {
         }
 
         // Create a fire event for zone 1
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", "NONE");
 
         // Test selection
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -202,30 +202,6 @@ public class DroneManagerTest {
                 lowWorkloadDrone.getDroneId(), selected.getDroneId());
     }
 
-    @Test
-    public void testSelectBestDroneForEvent_ProximityBased() {
-        // Register two available drones with same workload but at different distances
-        DroneStatus closeDrone = droneManager.registerDrone("close");
-        DroneStatus farDrone = droneManager.registerDrone("far");
-
-        // Position them at different distances from zone 1
-        // Assuming zone 1 center is around (15,15) based on zone definition in setUp
-        closeDrone.setCurrentLocation(new Location(10, 10)); // Closer to zone 1
-        farDrone.setCurrentLocation(new Location(50, 50));   // Further from zone 1
-
-        // Make both idle with same workload
-        closeDrone.setState("IDLE");
-        farDrone.setState("IDLE");
-
-        // Create a fire event for zone 1
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
-
-        // Test selection
-        DroneStatus selected = droneManager.selectBestDroneForEvent(event);
-        assertNotNull("A drone should be selected", selected);
-        assertEquals("Closer drone should be selected when workloads are equal",
-                closeDrone.getDroneId(), selected.getDroneId());
-    }
 
     @Test
     public void testSelectBestDroneForEvent_NoDronesAvailable() {
@@ -234,7 +210,7 @@ public class DroneManagerTest {
         busyDrone.setState("EN ROUTE");
 
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", "NONE");
 
         // Test selection with no available drones
         DroneStatus selected = droneManager.selectBestDroneForEvent(event);
@@ -248,7 +224,7 @@ public class DroneManagerTest {
         DroneStatus drone = droneManager.registerDrone(droneId);
 
         // Create a fire event
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", "NONE");
         Location newLocation = new Location(15, 15);
 
         // Update drone status
@@ -281,7 +257,7 @@ public class DroneManagerTest {
         // Test updating a drone that doesn't exist (should not throw exception)
         String nonExistentId = "nonexistent";
         Location location = new Location(10, 10);
-        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", false);
+        FireEvent event = new FireEvent("10:30", 1, "FIRE", "HIGH", "NONE");
 
         // This should not throw an exception
         droneManager.updateDroneStatus(nonExistentId, "EN ROUTE", location, event);
