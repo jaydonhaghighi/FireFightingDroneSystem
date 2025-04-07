@@ -12,14 +12,10 @@ import java.net.*;
  * ANSI colors for console output
  */
 class FireSystemColors {
-    // Colors
     static final String RESET = "\u001B[0m";
-    // Regular colors
     static final String RED = "\u001B[31m";
     static final String GREEN = "\u001B[32m";
     static final String PURPLE = "\u001B[35m";
-    static final String CYAN = "\u001B[36m";
-
 }
 
 /**
@@ -27,7 +23,6 @@ class FireSystemColors {
  * It also listens for responses from the Scheduler regarding dispatched fire events.
  */
 public class FireIncidentSubsystem {
-    //private final Scheduler scheduler;
     private final String inputFile;
 
     DatagramPacket sendPacket, receivePacket;
@@ -69,11 +64,6 @@ public class FireIncidentSubsystem {
         } catch (IOException e) {
             System.out.println("receive error: " + e);
         }
-
-        int len = receivePacket.getLength();
-        String r = new String(data, 0, len);
-        
-//        System.out.println(FireSystemColors.GREEN + "CONFIRMED: " + r + FireSystemColors.RESET);
     }
 
     /**
@@ -102,7 +92,7 @@ public class FireIncidentSubsystem {
      * Reads fire events from the input file and sends them to the Scheduler for processing.
      * It continuously waits for and handles responses from the Scheduler.
      */
-    public FireEvent readFile() {
+    public void readFile() {
         // reads file (fire_events.txt)
         try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
             String line;
@@ -127,7 +117,7 @@ public class FireIncidentSubsystem {
 
                 try {
                     int delaySeconds = 3;
-                    System.out.println(FireSystemColors.CYAN + "Next fire in " + delaySeconds +
+                    System.out.println(FireSystemColors.GREEN + "Next fire in " + delaySeconds +
                             "s" + FireSystemColors.RESET);
                     Thread.sleep(delaySeconds * 1000);
                 } catch (InterruptedException e) {
@@ -137,7 +127,6 @@ public class FireIncidentSubsystem {
         } catch (IOException e) {
             System.err.println("[FireIncidentSubsystem] Error: " + e.getMessage());
         }
-        return null;
     }
 
     public static void main(String[] args){

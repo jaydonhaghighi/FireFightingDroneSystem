@@ -18,7 +18,6 @@ import static models.FireEvent.createFireEventFromString;
  * Interface for different states of the drone
  */
 interface DroneState {
-    // Default implementations for all methods - do nothing by default
     default void handleFireEvent(DroneSubsystem context, FireEvent event) {}
     default void dropAgent(DroneSubsystem context) {}
     default void returningBack(DroneSubsystem context) {}
