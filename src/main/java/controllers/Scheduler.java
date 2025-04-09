@@ -32,8 +32,8 @@ public class Scheduler {
     // Network communication sockets
     private final DatagramSocket sendSocket;
     private final DatagramSocket receiveSocket;
-    private final int sendPort = 6000;
-    private final int receivePort = 6001;
+    private int sendPort = 6000;
+    private int receivePort = 6001;
     private final InetAddress fireIncidentIP;
     
     // Event and drone management

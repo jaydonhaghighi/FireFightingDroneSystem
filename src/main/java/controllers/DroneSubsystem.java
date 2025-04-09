@@ -18,7 +18,6 @@ import static models.FireEvent.createFireEventFromString;
  * Interface for different states of the drone
  */
 interface DroneState {
-    // Default implementations for all methods - do nothing by default
     default void handleFireEvent(DroneSubsystem context, FireEvent event) {}
     default void dropAgent(DroneSubsystem context) {}
     default void returningBack(DroneSubsystem context) {}
@@ -93,7 +92,7 @@ public class DroneSubsystem {
     private Location targetLocation;
     private Location baseLocation;
     private DroneSpecifications specifications;
-    private FireEvent currentEvent;
+    protected FireEvent currentEvent;
 
     // Static data for fire-fighting operations
     private static final Map<Integer, Integer> zoneDropsMap = new ConcurrentHashMap<>();
@@ -108,7 +107,7 @@ public class DroneSubsystem {
     // Network communication
     private final InetAddress serverIP;
     private DatagramPacket sendPacket, receivePacket;
-    private DatagramSocket sendSocket, receiveSocket;
+    protected DatagramSocket sendSocket, receiveSocket;
     private final int sendPort = 7000;
     private final int receivePort = 7001;
 
@@ -142,7 +141,7 @@ public class DroneSubsystem {
     /**
      * Initialize network sockets for communication
      */
-    private void initializeNetworking() {
+    protected void initializeNetworking() {
         try {
             // Extract drone number from ID for unique port assignment
             int droneNumber = 0;
@@ -272,11 +271,13 @@ public class DroneSubsystem {
      * @param event FireEvent the fire event to handle
      */
     public void handleFireEvent(FireEvent event) {
+        System.out.println("[" + droneId + "] preparing to handle new fire event - " + event);
         performStateTransition(() -> {
             if (event.hasError()) {
                 setError(event.getError());
             }
             currentState.handleFireEvent(this, event);
+            System.out.println("[" + droneId + "] State change to EN ROUTE");
         });
     }
 
@@ -284,6 +285,15 @@ public class DroneSubsystem {
      * Processes dropping agent action
      */
     public void dropAgent() {
+        if (currentState instanceof Idle) {
+            System.out.println("[" + droneId + "] drone is idle, nothing to drop");
+            return;
+        }
+        
+        if (currentState instanceof EnRoute) {
+            System.out.println("[" + droneId + "] drone is en route, cannot drop agent yet");
+        }
+        
         performStateTransition(() -> {
             // Set capacity to 0 when dropping agent
             specifications.empty();
@@ -296,6 +306,15 @@ public class DroneSubsystem {
      * Processes returning to base action
      */
     public void returningBack() {
+        if (currentState instanceof Idle) {
+            System.out.println("[" + droneId + "] drone is idle and stationed at base");
+            return;
+        }
+        
+        if (currentState instanceof DroppingAgent) {
+            System.out.println("[" + droneId + "] drone is dropping an agent and has not yet returned to its base");
+        }
+        
         performStateTransition(() -> currentState.returningBack(this));
     }
 
@@ -303,6 +322,15 @@ public class DroneSubsystem {
      * Processes drone fault action
      */
     public void droneFaulted() {
+        if (currentState instanceof Idle) {
+            System.out.println("[" + droneId + "] drone has not faulted");
+            return;
+        }
+        
+        if (currentState instanceof ArrivedToBase) {
+            System.out.println("[" + droneId + "] drone has arrived to base and not yet faulted");
+        }
+        
         performStateTransition(() -> currentState.droneFaulted(this));
     }
 
@@ -310,10 +338,24 @@ public class DroneSubsystem {
      * Processes task completion action
      */
     public void taskCompleted() {
+        if (currentState instanceof Idle) {
+            System.out.println("[" + droneId + "] drone is idle, no tasks have been completed");
+            return;
+        }
+        
+        if (currentState instanceof ArrivedToBase) {
+            System.out.println("[" + droneId + "] drone has arrived to base and completed its task");
+        }
+        
+        if (currentState instanceof Fault) {
+            System.out.println("[" + droneId + "] Drone has faulted and returned to base. Now setting to idle");
+        }
+        
         performStateTransition(() -> currentState.taskCompleted(this));
 
         // Process next event in queue if available
         if (!fireEventQueue.isEmpty()) {
+            System.out.println("[" + droneId + "] Processing next fire event in queue");
             FireEvent nextEvent = fireEventQueue.poll();
             scheduleFireEvent(nextEvent);
         }
@@ -381,8 +423,10 @@ public class DroneSubsystem {
      */
     public void scheduleFireEvent(FireEvent event) {
         if (currentState instanceof Idle) {
+            System.out.println("[" + droneId + "] Drone is idle and ready for new fire event");
             handleFireEvent(event);
         } else {
+            System.out.println("[" + droneId + "] Drone is not idle and cannot handle a new fire event");
             fireEventQueue.add(event);
         }
     }
@@ -853,7 +897,7 @@ public class DroneSubsystem {
      */
     public static void main(String[] args) {
         try {
-            final int NUM_DRONES = 5;
+            final int NUM_DRONES = 10;
             Thread[] threads = new Thread[NUM_DRONES];
             InetAddress localHost = InetAddress.getLocalHost();
 

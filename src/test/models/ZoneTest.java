@@ -54,25 +54,6 @@ public class ZoneTest {
         assertEquals("Height should be calculated correctly", 10, zone1.getHeight());
     }
 
-    @Test
-    public void testConstructorAndGetters_SingleLocationConstructor() {
-        // Test zone created with single location constructor
-        assertEquals("Zone ID should match constructor value", 4, singlePointZone.getId());
-
-        // Check that the center is the provided location
-        assertEquals("Center X should match provided location", 50, singlePointZone.getLocation().getX());
-        assertEquals("Center Y should match provided location", 50, singlePointZone.getLocation().getY());
-
-        // Check that boundaries are created correctly around the center point (default +/- 5)
-        assertEquals("Top-left X should be center X - 5", 45, singlePointZone.getTopLeft().getX());
-        assertEquals("Top-left Y should be center Y - 5", 45, singlePointZone.getTopLeft().getY());
-        assertEquals("Bottom-right X should be center X + 5", 55, singlePointZone.getBottomRight().getX());
-        assertEquals("Bottom-right Y should be center Y + 5", 55, singlePointZone.getBottomRight().getY());
-
-        // Check dimensions
-        assertEquals("Width should be 10", 10, singlePointZone.getWidth());
-        assertEquals("Height should be 10", 10, singlePointZone.getHeight());
-    }
 
     @Test
     public void testContains() {

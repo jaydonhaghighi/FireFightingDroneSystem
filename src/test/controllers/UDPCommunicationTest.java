@@ -30,7 +30,7 @@ class UDPCommunicationTest {
 
     @Test
     void testFireIncidentSubsystemSendsFireEvent() throws Exception {
-        FireEvent fireEvent = new FireEvent("14:03:15", 3, "FIRE_DETECTED", "High", false);
+        FireEvent fireEvent = new FireEvent("14:03:15", 3, "FIRE_DETECTED", "High", "NONE");
         byte[] sendData = fireEvent.toString().getBytes();
 
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, localAddress, SCHEDULER_RECEIVE_PORT);
@@ -42,7 +42,7 @@ class UDPCommunicationTest {
 
     @Test
     void testSchedulerReceivesFireEventAndSendsDummyTaskToDrone() throws Exception {
-        FireEvent fireEvent = new FireEvent("14:03:15", 3, "FIRE_DETECTED", "High", false);
+        FireEvent fireEvent = new FireEvent("14:03:15", 3, "FIRE_DETECTED", "High", "NONE");
         byte[] sendData = fireEvent.toString().getBytes();
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, localAddress, SCHEDULER_RECEIVE_PORT);
         testSocket.send(sendPacket);

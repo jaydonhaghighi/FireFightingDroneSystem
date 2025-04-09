@@ -34,24 +34,30 @@ public class DroneManager {
     }
     
     /**
-     * Initialize the zone map by reading from zones.txt file
+     * Initialize the zone map by reading from Final_zone_file.csv
      */
     private void initializeZones() {
-        String zonesFile = "src/main/resources/zones.txt";
-//        System.out.println("[DRONE MANAGER] Loading zones from " + zonesFile);
+        String zonesFile = "src/main/resources/Final_zone_file.csv";
         
         try (BufferedReader reader = new BufferedReader(new FileReader(zonesFile))) {
             String line;
             int zoneCount = 0;
+            boolean isFirstLine = true;
             
             while ((line = reader.readLine()) != null) {
+                // Skip header line
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    continue;
+                }
+                
                 // Skip comments and empty lines
                 line = line.trim();
                 if (line.isEmpty() || line.startsWith("#")) {
                     continue;
                 }
                 
-                String[] parts = line.split("\\s+");
+                String[] parts = line.split(",");
                 if (parts.length >= 5) {
                     try {
                         int id = Integer.parseInt(parts[0]);
@@ -63,26 +69,19 @@ public class DroneManager {
                         Zone zone = new Zone(id, x1, y1, x2, y2);
                         zones.put(id, zone);
                         zoneCount++;
-//                        System.out.println("[DRONE MANAGER] Loaded zone: " + zone);
                     } catch (NumberFormatException e) {
-//                        System.err.println("[DRONE MANAGER] Error parsing zone data: " + line);
+                        // Ignore parsing errors
                     }
                 }
             }
             
-//            System.out.println("[DRONE MANAGER] Successfully loaded " + zoneCount + " zones");
-            
         } catch (IOException e) {
-//            System.err.println("[DRONE MANAGER] Error reading zones file: " + e.getMessage());
-//            System.err.println("[DRONE MANAGER] Falling back to default zone grid");
-            
             // Fallback to default grid if file cannot be read
             createDefaultZones();
         }
         
         // Ensure we have at least some zones defined
         if (zones.isEmpty()) {
-//            System.err.println("[DRONE MANAGER] No zones loaded from file, creating defaults");
             createDefaultZones();
         }
     }
