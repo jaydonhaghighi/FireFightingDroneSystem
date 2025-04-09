@@ -20,9 +20,9 @@ public class DroneSpecifications {
         this.maxSpeed = 56.0;        // 56 km/h - standard drone speed
         this.timeToOpenNozzle = 100;  // 100 ms to open nozzle
         this.flowRate = 5.0;          // 5 litres/s flow rate
-        this.carryCapacity = 30.0;    // 30 litres total capacity
-        this.currentCapacity = 30.0;  // Start with full capacity
-        this.batteryLife = 30;        // 30 minutes flight time
+        this.carryCapacity = 10.0;    // 10 litres total capacity
+        this.currentCapacity = 10.0;  // Start with full capacity
+        this.batteryLife = 60;        // 60 minutes flight time
         this.acceleration = 4.8;      // 4.8 m/s²
         this.deceleration = 5.0;      // 5.0 m/s²
     }

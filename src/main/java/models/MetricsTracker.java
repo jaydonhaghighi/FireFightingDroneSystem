@@ -19,6 +19,9 @@ public class MetricsTracker {
     private final AtomicLong totalFiresDetected = new AtomicLong(0);
     private final AtomicLong totalFiresExtinguished = new AtomicLong(0);
     
+    // Simulation time scaling factor (3 minutes real time = 1 second in simulation)
+    private static final int TIME_SCALE_FACTOR = 180;
+    
     // Fire-specific metrics with thread-safe maps
     private final Map<Integer, Instant> fireStartTimes = new ConcurrentHashMap<>();
     private final Map<Integer, Instant> fireEndTimes = new ConcurrentHashMap<>();
@@ -118,6 +121,15 @@ public class MetricsTracker {
     }
     
     /**
+     * Gets the total simulation duration between system start and end time, scaled by the time factor
+     * @return simulation duration in milliseconds, or 0 if no fires started yet
+     */
+    public long getSimulationSystemDuration() {
+        // Get real time and convert to simulation time
+        return getTotalSystemDuration() * TIME_SCALE_FACTOR;
+    }
+    
+    /**
      * Gets the average response time for all fires
      * @return average response time in milliseconds, or -1 if no responses
      */
@@ -144,6 +156,15 @@ public class MetricsTracker {
     }
     
     /**
+     * Gets the average simulation response time for all fires, scaled by the time factor
+     * @return average simulation response time in milliseconds, or -1 if no responses
+     */
+    public double getSimulationAverageResponseTime() {
+        double realTime = getAverageResponseTime();
+        return realTime >= 0 ? realTime * TIME_SCALE_FACTOR : -1;
+    }
+    
+    /**
      * Gets the average time to extinguish fires
      * @return average time in milliseconds, or -1 if no extinguished fires
      */
@@ -167,6 +188,15 @@ public class MetricsTracker {
         }
         
         return count > 0 ? (double) totalExtinguishTime / count : -1;
+    }
+    
+    /**
+     * Gets the average simulation time to extinguish fires, scaled by the time factor
+     * @return average simulation extinguish time in milliseconds, or -1 if no extinguished fires
+     */
+    public double getSimulationAverageExtinguishTime() {
+        double realTime = getAverageExtinguishTime();
+        return realTime >= 0 ? realTime * TIME_SCALE_FACTOR : -1;
     }
     
     /**
@@ -207,16 +237,16 @@ public class MetricsTracker {
           .append("/").append(totalFiresDetected.get())
           .append(" (").append(String.format("%.1f%%", getFiresExtinguishedPercentage())).append(")\n");
         
-        // Time metrics
-        long totalDuration = getTotalSystemDuration();
-        sb.append("Total time: ").append(formatDuration(totalDuration)).append("\n");
+        // Time metrics using simulation time
+        long totalDuration = getSimulationSystemDuration();
+        sb.append("Simulation time: ").append(formatDuration(totalDuration)).append("\n");
         
-        double avgResponse = getAverageResponseTime();
+        double avgResponse = getSimulationAverageResponseTime();
         if (avgResponse >= 0) {
             sb.append("Avg response: ").append(formatDuration((long)avgResponse)).append("\n");
         }
         
-        double avgExtinguish = getAverageExtinguishTime();
+        double avgExtinguish = getSimulationAverageExtinguishTime();
         if (avgExtinguish >= 0) {
             sb.append("Avg extinguish: ").append(formatDuration((long)avgExtinguish)).append("\n");
         }
@@ -237,16 +267,16 @@ public class MetricsTracker {
             .append("/").append(totalFiresDetected.get())
             .append(" (").append(String.format("%.1f%%", getFiresExtinguishedPercentage())).append(")</div>");
         
-        // Time metrics
-        long totalDuration = getTotalSystemDuration();
-        html.append("<div><b>Total time:</b> ").append(formatDuration(totalDuration)).append("</div>");
+        // Time metrics using simulation time
+        long totalDuration = getSimulationSystemDuration();
+        html.append("<div><b>Simulation time:</b> ").append(formatDuration(totalDuration)).append("</div>");
         
-        double avgResponse = getAverageResponseTime();
+        double avgResponse = getSimulationAverageResponseTime();
         if (avgResponse >= 0) {
             html.append("<div><b>Avg response:</b> ").append(formatDuration((long)avgResponse)).append("</div>");
         }
         
-        double avgExtinguish = getAverageExtinguishTime();
+        double avgExtinguish = getSimulationAverageExtinguishTime();
         if (avgExtinguish >= 0) {
             html.append("<div><b>Avg extinguish:</b> ").append(formatDuration((long)avgExtinguish)).append("</div>");
         }
@@ -258,19 +288,18 @@ public class MetricsTracker {
     /**
      * Formats a duration in milliseconds to a human-readable string
      * @param millis duration in milliseconds
-     * @return formatted string (e.g., "1m 30s")
+     * @return formatted string (e.g., "00:01:30" for 1 minute and 30 seconds)
      */
     private String formatDuration(long millis) {
         if (millis < 0) return "N/A";
         
         long seconds = millis / 1000;
         long minutes = seconds / 60;
-        seconds %= 60;
+        long hours = minutes / 60;
         
-        if (minutes > 0) {
-            return String.format("%dm %ds", minutes, seconds);
-        } else {
-            return String.format("%ds", seconds);
-        }
+        seconds %= 60;
+        minutes %= 60;
+        
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds);
     }
 }

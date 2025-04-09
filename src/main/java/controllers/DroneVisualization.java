@@ -116,9 +116,9 @@ public class DroneVisualization extends JFrame {
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setLeftComponent(topRightPanel);
         splitPane.setRightComponent(scrollPane);
-        splitPane.setDividerLocation(200);
+        splitPane.setDividerLocation(250); // Increased from 200 to 250
         splitPane.setDividerSize(5);
-        splitPane.setResizeWeight(0.4);
+        splitPane.setResizeWeight(0.5); // Changed from 0.4 to 0.5 for more balanced resizing
         
         // Add the split pane to the right panel
         rightPanel.add(splitPane, BorderLayout.CENTER);
@@ -167,22 +167,22 @@ public class DroneVisualization extends JFrame {
         html.append(" (").append(String.format("%.1f%%", percent)).append(")");
         html.append("</div>");
         
-        // Time section
+        // Time section (now using simulation time)
         html.append("<div style='margin: 2px 0;'>");
-        html.append("<b>Total time:</b> ");
-        html.append(formatMillis(metrics.getTotalSystemDuration()));
+        html.append("<b>Simulation time:</b> ");
+        html.append(formatMillis(metrics.getSimulationSystemDuration()));
         html.append("</div>");
         
-        // Response time section
+        // Response time section (now using simulation time)
         html.append("<div style='margin: 2px 0;'>");
         html.append("<b>Avg response:</b> ");
-        html.append(formatMillis((long)metrics.getAverageResponseTime()));
+        html.append(formatMillis((long)metrics.getSimulationAverageResponseTime()));
         html.append("</div>");
         
-        // Extinguish time section
+        // Extinguish time section (now using simulation time)
         html.append("<div style='margin: 2px 0;'>");
         html.append("<b>Avg extinguish:</b> ");
-        html.append(formatMillis((long)metrics.getAverageExtinguishTime()));
+        html.append(formatMillis((long)metrics.getSimulationAverageExtinguishTime()));
         html.append("</div>");
         
         html.append("</div></html>"); // Close main div and HTML
@@ -201,13 +201,12 @@ public class DroneVisualization extends JFrame {
         
         long seconds = millis / 1000;
         long minutes = seconds / 60;
-        seconds %= 60;
+        long hours = minutes / 60;
         
-        if (minutes > 0) {
-            return String.format("%dm %ds", minutes, seconds);
-        } else {
-            return String.format("%ds", seconds);
-        }
+        seconds %= 60;
+        minutes %= 60;
+        
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds);
     }
 
     /**
